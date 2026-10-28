@@ -1,0 +1,53 @@
+# Windows / editors
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# .NET / WPF build output
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Tt]est[Rr]esults/
+artifacts/
+packages/
+*.nupkg
+*.snupkg
+
+# Node / Svelte / Tauri build output
+node_modules/
+.svelte-kit/
+build/
+dist/
+package/
+src-tauri/target/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+client_secret*.json
+credentials*.json
+token*.json
+*.pfx
+*.p12
+
+# Local-only personal files
+ツヅ_AGENTS.md
+日記/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*~
