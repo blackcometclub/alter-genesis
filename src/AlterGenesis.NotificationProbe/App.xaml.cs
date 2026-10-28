@@ -20,12 +20,19 @@ public partial class App : Application
     private Mutex? _instanceMutex;
     private string[] _args = [];
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
         ConfigureLanguage(e.Args);
         _args = e.Args;
+
+        if (ReadArgumentValue(e.Args, "--resize-report") is { } resizeReport)
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            Shutdown(await CardResizeVerifier.RunAsync(resizeReport) ? 0 : 1);
+            return;
+        }
 
         if (ReadArgumentValue(e.Args, "--sound-report") is { } soundReport)
         {

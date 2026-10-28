@@ -4,7 +4,6 @@
         xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="ALTER GENESIS — Notification Probe"
-        Width="{DynamicResource Card.Width}"
         SizeToContent="Height"
         MaxHeight="{DynamicResource Card.MaxWindowHeight}"
         WindowStyle="None"

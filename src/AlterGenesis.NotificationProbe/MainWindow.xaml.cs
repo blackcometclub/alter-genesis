@@ -42,7 +42,14 @@ public partial class MainWindow : Window
     public void SetCardSize(NotificationCardSize size)
     {
         CardSize = size;
-        NotificationCardLayout.For(size).Apply(Resources);
+        var layout = NotificationCardLayout.For(size);
+        layout.Apply(Resources);
+        // Keep the preset width fixed while SizeToContent recalculates the height.
+        // Relax the old minimum before lowering the maximum on a large-to-small change.
+        MinWidth = Math.Min(MinWidth, layout.Width);
+        MaxWidth = layout.Width;
+        MinWidth = layout.Width;
+        Width = layout.Width;
     }
     public event EventHandler? SettingsRequested;
 

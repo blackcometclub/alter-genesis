@@ -14,13 +14,12 @@ internal sealed record NotificationCardLayout(
 {
     internal static NotificationCardLayout For(NotificationCardSize size) => size switch
     {
-        NotificationCardSize.Small => new(480, 128, 512, new Thickness(16), 56, 8, 12),
+        NotificationCardSize.Small => new(376, 128, 512, new Thickness(16), 56, 8, 12),
         _ => new(560, 152, 600, new Thickness(24, 20, 24, 20), 68, 12, 16),
     };
 
     internal void Apply(ResourceDictionary resources)
     {
-        resources["Card.Width"] = Width;
         resources["Card.RowHeight"] = RowHeight;
         resources["Card.MaxWindowHeight"] = ViewportHeight + 2;
         resources["Card.ViewportHeight"] = ViewportHeight;

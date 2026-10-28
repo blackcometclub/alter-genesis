@@ -27,7 +27,7 @@ internal static class LayoutVerifier
 
         var rows = items.Select(item => MeasureControlRow(item, window)).ToList();
         var expectedRowHeight = window.CardSize == NotificationCardSize.Small ? 128 : 152;
-        var expectedWidth = window.CardSize == NotificationCardSize.Small ? 480 : 560;
+        var expectedWidth = window.CardSize == NotificationCardSize.Small ? 376 : 560;
         var expectedMaxHeight = window.CardSize == NotificationCardSize.Small ? 514 : 602;
         var checks = new Dictionary<string, bool>
         {
@@ -36,6 +36,7 @@ internal static class LayoutVerifier
                 && snoozeControls.All(control => Near(control.ActualHeight, 32))
                 && closeButtons.All(button => Near(button.ActualHeight, 32)),
             ["controlEdgesAligned"] = rows.Count > 0 && rows.All(row => row.MaximumEdgeDelta <= Tolerance),
+            ["controlsWithinCard"] = rows.Count > 0 && rows.All(row => row.WithinCard),
             ["eventHeightMatchesSize"] = items.Count > 0 && items.All(item => Near(item.ActualHeight, expectedRowHeight)),
             ["windowWidthMatchesSize"] = Near(window.ActualWidth, expectedWidth),
             ["windowHeightMatchesSize"] = Near(window.ActualHeight,
@@ -99,8 +100,13 @@ internal static class LayoutVerifier
         var bottomDelta = Math.Abs(
             (snoozeTop + snooze.ActualHeight) - (closeTop + close.ActualHeight));
         var heightDelta = Math.Abs(snooze.ActualHeight - close.ActualHeight);
+        var itemLeft = item.TranslatePoint(new Point(), window).X;
+        var itemRight = itemLeft + item.ActualWidth;
+        var snoozeLeft = snooze.TranslatePoint(new Point(), window).X;
+        var closeRight = close.TranslatePoint(new Point(), window).X + close.ActualWidth;
 
-        return new ControlRowMetrics(topDelta, bottomDelta, heightDelta);
+        return new ControlRowMetrics(topDelta, bottomDelta, heightDelta,
+            snoozeLeft >= itemLeft - Tolerance && closeRight <= itemRight + Tolerance);
     }
 
     private static List<T> FindByAutomationId<T>(
@@ -148,7 +154,8 @@ internal sealed record LayoutReport(
 internal sealed record ControlRowMetrics(
     double TopDelta,
     double BottomDelta,
-    double HeightDelta)
+    double HeightDelta,
+    bool WithinCard)
 {
     public double MaximumEdgeDelta => Math.Max(TopDelta, Math.Max(BottomDelta, HeightDelta));
 }
