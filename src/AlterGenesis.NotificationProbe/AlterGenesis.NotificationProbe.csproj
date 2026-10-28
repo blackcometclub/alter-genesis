@@ -10,4 +10,9 @@
     <Product>ALTER GENESIS Notification Probe</Product>
     <Description>Isolated WPF probe for persistent Google Calendar notifications.</Description>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\audio\candidates\2026-10-28\01-koron.wav" LogicalName="AlterGenesis.Sounds.Koron.wav" />
+    <EmbeddedResource Include="..\..\audio\candidates\2026-10-28\02-kirari.wav" LogicalName="AlterGenesis.Sounds.Kirari.wav" />
+    <EmbeddedResource Include="..\..\audio\candidates\2026-10-28\03-pikon.wav" LogicalName="AlterGenesis.Sounds.Pikon.wav" />
+  </ItemGroup>
 </Project>

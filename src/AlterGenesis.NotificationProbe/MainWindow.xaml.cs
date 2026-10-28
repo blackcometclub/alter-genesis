@@ -34,6 +34,10 @@ public partial class MainWindow : Window
     }
 
     public ObservableCollection<NotificationItem> Notifications { get; }
+    public event EventHandler? SettingsRequested;
+
+    private void OpenSettingsClick(object sender, RoutedEventArgs e) =>
+        SettingsRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {

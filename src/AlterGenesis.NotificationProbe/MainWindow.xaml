@@ -19,6 +19,11 @@
         TextOptions.TextRenderingMode="ClearType"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
+    <Window.ContextMenu>
+        <ContextMenu Style="{StaticResource Style.SettingsContextMenu}">
+            <MenuItem Header="{DynamicResource Text.Settings}" Click="OpenSettingsClick" />
+        </ContextMenu>
+    </Window.ContextMenu>
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0"
                             ResizeBorderThickness="0"

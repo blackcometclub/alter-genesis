@@ -45,6 +45,41 @@
         </Setter>
     </Style>
 
+    <Style x:Key="Style.SettingsMenuItem" TargetType="MenuItem">
+        <Setter Property="Height" Value="{StaticResource Dimension.ControlHeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="ItemBorder" Padding="12,0" Background="Transparent" CornerRadius="4">
+                        <ContentPresenter ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource Brush.SurfaceHover}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="Style.SettingsContextMenu" TargetType="ContextMenu">
+        <Setter Property="ItemContainerStyle" Value="{StaticResource Style.SettingsMenuItem}" />
+        <Setter Property="MinWidth" Value="112" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Padding="4" CornerRadius="6" Background="{DynamicResource Brush.SurfaceRaised}"
+                            BorderBrush="{DynamicResource Brush.BorderStrong}" BorderThickness="1">
+                        <ItemsPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="Style.TitleButton" TargetType="Button">
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
         <Setter Property="Background" Value="Transparent" />
@@ -141,6 +176,11 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource Brush.ActionPressed}" />
                             <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource Brush.ActionPressed}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+                            <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource Brush.SurfaceRaised}" />
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

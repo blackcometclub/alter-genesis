@@ -10,4 +10,17 @@
     <system:String x:Key="Text.Snooze1Hour">1時間後</system:String>
     <system:String x:Key="Text.SnoozeAtTime">時刻を指定…</system:String>
     <system:String x:Key="Text.Close">閉じる</system:String>
+    <system:String x:Key="Text.Settings">設定</system:String>
+    <system:String x:Key="Text.SettingsTitle">設定 — ALTER GENESIS</system:String>
+    <system:String x:Key="Text.NotificationSound">通知音</system:String>
+    <system:String x:Key="Text.SoundNone">なし</system:String>
+    <system:String x:Key="Text.SoundKoron">ころん</system:String>
+    <system:String x:Key="Text.SoundKirari">きらり</system:String>
+    <system:String x:Key="Text.SoundPikon">ぴこん</system:String>
+    <system:String x:Key="Text.PreviewSound">試聴</system:String>
+    <system:String x:Key="Text.TestNotification">通知を試す</system:String>
+    <system:String x:Key="Text.SoundFailed">音を再生できませんでした。</system:String>
+    <system:String x:Key="Text.SettingsSaveFailed">設定を保存できませんでした。選択を元に戻しました。</system:String>
+    <system:String x:Key="Text.SettingsUnreadable">設定ファイルを読み込めません。元のファイルを保護するため、変更は保存しません。</system:String>
+    <system:String x:Key="Text.AlreadyRunning">この保存先を使うALTER GENESISはすでに起動しています。</system:String>
 </ResourceDictionary>

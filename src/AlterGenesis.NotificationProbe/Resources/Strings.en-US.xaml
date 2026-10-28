@@ -10,4 +10,17 @@
     <system:String x:Key="Text.Snooze1Hour">In 1 hour</system:String>
     <system:String x:Key="Text.SnoozeAtTime">At a time…</system:String>
     <system:String x:Key="Text.Close">Close</system:String>
+    <system:String x:Key="Text.Settings">Settings</system:String>
+    <system:String x:Key="Text.SettingsTitle">Settings — ALTER GENESIS</system:String>
+    <system:String x:Key="Text.NotificationSound">Notification sound</system:String>
+    <system:String x:Key="Text.SoundNone">None</system:String>
+    <system:String x:Key="Text.SoundKoron">Koron</system:String>
+    <system:String x:Key="Text.SoundKirari">Kirari</system:String>
+    <system:String x:Key="Text.SoundPikon">Pikon</system:String>
+    <system:String x:Key="Text.PreviewSound">Preview</system:String>
+    <system:String x:Key="Text.TestNotification">Test notification</system:String>
+    <system:String x:Key="Text.SoundFailed">The sound could not be played.</system:String>
+    <system:String x:Key="Text.SettingsSaveFailed">Settings could not be saved. The previous selection has been restored.</system:String>
+    <system:String x:Key="Text.SettingsUnreadable">The settings file could not be read. Changes will not be saved to protect the original file.</system:String>
+    <system:String x:Key="Text.AlreadyRunning">ALTER GENESIS is already running with this data folder.</system:String>
 </ResourceDictionary>
