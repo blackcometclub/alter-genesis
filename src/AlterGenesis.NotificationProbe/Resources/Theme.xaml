@@ -65,6 +65,38 @@
         </Setter>
     </Style>
 
+    <Style x:Key="Style.CalendarCheckBox" TargetType="CheckBox">
+        <Setter Property="MinHeight" Value="{StaticResource Dimension.ControlHeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <Border x:Name="Row" BorderThickness="1" BorderBrush="Transparent" CornerRadius="4" Padding="4,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="16" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="16" Height="16" VerticalAlignment="Center" CornerRadius="4"
+                                    Background="{DynamicResource Brush.SurfaceRaised}" BorderBrush="{DynamicResource Brush.BorderStrong}" BorderThickness="1">
+                                <Path x:Name="Check" Visibility="Collapsed" Width="9" Height="6" Stretch="Fill"
+                                      Stroke="{DynamicResource Brush.TextPrimary}" StrokeThickness="1.5" Data="M 0,3 L 3,6 L 9,0" />
+                            </Border>
+                            <ContentPresenter Grid.Column="2" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Check" Property="Visibility" Value="Visible" /></Trigger>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource Brush.SurfaceHover}" /></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource Brush.Focus}" /></Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" /></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="Style.SettingsContextMenu" TargetType="ContextMenu">
         <Setter Property="ItemContainerStyle" Value="{StaticResource Style.SettingsMenuItem}" />
         <Setter Property="MinWidth" Value="112" />

@@ -30,4 +30,18 @@
     <system:String x:Key="Text.NotificationsUnreadable">通知データを読み込めませんでした。元のファイルは変更していません。</system:String>
     <system:String x:Key="Text.NotificationsSaveFailed">通知の変更を保存できませんでした。通知はそのまま残します。</system:String>
     <system:String x:Key="Text.ReminderSaveFailed">再通知を保存できませんでした。予約を保ったまま、もう一度試します。</system:String>
+    <system:String x:Key="Text.GoogleCalendar">Googleカレンダー</system:String>
+    <system:String x:Key="Text.GoogleConnect">Googleに接続</system:String>
+    <system:String x:Key="Text.GoogleRefresh">更新</system:String>
+    <system:String x:Key="Text.GoogleDisconnect">切断</system:String>
+    <system:String x:Key="Text.GoogleCancel">中止</system:String>
+    <system:String x:Key="Text.GoogleChooseClient">Googleの接続設定を選択</system:String>
+    <system:String x:Key="Text.GoogleCanceled">接続を中止しました。</system:String>
+    <system:String x:Key="Text.GooglePermissionsRequired">カレンダー一覧と予定の読み取りを両方許可してください。</system:String>
+    <system:String x:Key="Text.GoogleCredentialsUnreadable">保存した接続情報を読み込めませんでした。</system:String>
+    <system:String x:Key="Text.GoogleConfigurationInvalid">デスクトップアプリ用の接続設定JSONを確認してください。</system:String>
+    <system:String x:Key="Text.GoogleConnectionFailed">Googleと通信できませんでした。接続設定とネットワークを確認してください。</system:String>
+    <system:String x:Key="Text.GoogleUnnamedCalendar">名称未設定</system:String>
+    <system:String x:Key="Text.GoogleNoCalendars">カレンダーがありません。</system:String>
+    <system:String x:Key="Text.GoogleSelectionSaveFailed">選択を保存できませんでした。変更を元に戻しました。</system:String>
 </ResourceDictionary>

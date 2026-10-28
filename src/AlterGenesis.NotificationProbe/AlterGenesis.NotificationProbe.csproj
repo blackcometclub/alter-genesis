@@ -10,10 +10,12 @@
     <RootNamespace>AlterGenesis.NotificationProbe</RootNamespace>
     <Product>ALTER GENESIS Notification Probe</Product>
     <Description>Isolated WPF probe for persistent Google Calendar notifications.</Description>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
+    <PackageReference Include="Google.Apis.Calendar.v3" Version="1.77.0.4285" />
     <EmbeddedResource Include="..\..\audio\candidates\2026-10-28\01-koron.wav" LogicalName="AlterGenesis.Sounds.Koron.wav" />
     <EmbeddedResource Include="..\..\audio\candidates\2026-10-28\02-kirari.wav" LogicalName="AlterGenesis.Sounds.Kirari.wav" />
     <EmbeddedResource Include="..\..\audio\candidates\2026-10-28\03-pikon.wav" LogicalName="AlterGenesis.Sounds.Pikon.wav" />

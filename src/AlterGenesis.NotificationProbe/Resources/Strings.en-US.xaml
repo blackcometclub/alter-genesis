@@ -30,4 +30,18 @@
     <system:String x:Key="Text.NotificationsUnreadable">Notification data could not be read. The original file has not been changed.</system:String>
     <system:String x:Key="Text.NotificationsSaveFailed">The notification change could not be saved. The notification will remain visible.</system:String>
     <system:String x:Key="Text.ReminderSaveFailed">The reminder could not be saved. Its reservation will be kept and retried.</system:String>
+    <system:String x:Key="Text.GoogleCalendar">Google Calendar</system:String>
+    <system:String x:Key="Text.GoogleConnect">Connect to Google</system:String>
+    <system:String x:Key="Text.GoogleRefresh">Refresh</system:String>
+    <system:String x:Key="Text.GoogleDisconnect">Disconnect</system:String>
+    <system:String x:Key="Text.GoogleCancel">Cancel</system:String>
+    <system:String x:Key="Text.GoogleChooseClient">Select Google connection settings</system:String>
+    <system:String x:Key="Text.GoogleCanceled">Connection canceled.</system:String>
+    <system:String x:Key="Text.GooglePermissionsRequired">Allow read access to both your calendar list and events.</system:String>
+    <system:String x:Key="Text.GoogleCredentialsUnreadable">Saved connection information could not be read.</system:String>
+    <system:String x:Key="Text.GoogleConfigurationInvalid">Check the connection JSON for a desktop application.</system:String>
+    <system:String x:Key="Text.GoogleConnectionFailed">Could not communicate with Google. Check your connection settings and network.</system:String>
+    <system:String x:Key="Text.GoogleUnnamedCalendar">Unnamed calendar</system:String>
+    <system:String x:Key="Text.GoogleNoCalendars">No calendars found.</system:String>
+    <system:String x:Key="Text.GoogleSelectionSaveFailed">The selection could not be saved. Your previous choices have been restored.</system:String>
 </ResourceDictionary>

@@ -32,6 +32,9 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Local configuration and credentials
+private/
+google-client*.json
+*.dpapi
 .env
 .env.*
 !.env.example

@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:effects="clr-namespace:AlterGenesis.NotificationProbe.Effects"
         xmlns:models="clr-namespace:AlterGenesis.NotificationProbe.Models"
+        xmlns:local="clr-namespace:AlterGenesis.NotificationProbe"
         Title="{DynamicResource Text.SettingsTitle}"
         Width="408" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
@@ -19,6 +20,8 @@
             <RowDefinition Height="24" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="8" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="24" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="24" />
             <RowDefinition Height="Auto" />
@@ -58,5 +61,6 @@
                 Content="{DynamicResource Text.TestNotification}" Click="TestNotificationClick"
                 Style="{StaticResource Style.CloseButton}"
                 AutomationProperties.AutomationId="TestNotification" />
+        <local:GoogleConnectionPanel Grid.Row="10" x:Name="GooglePanel" />
     </Grid>
 </Window>

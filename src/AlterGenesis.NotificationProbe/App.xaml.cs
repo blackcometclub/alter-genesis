@@ -10,6 +10,7 @@ using AlterGenesis.NotificationProbe.Models;
 using AlterGenesis.NotificationProbe.Settings;
 using AlterGenesis.NotificationProbe.Notifications;
 using AlterGenesis.NotificationProbe.Interop;
+using AlterGenesis.NotificationProbe.Google;
 
 namespace AlterGenesis.NotificationProbe;
 
@@ -28,6 +29,7 @@ public partial class App : Application
     private bool _exiting;
     private bool _dueFailureShown;
     private string? _runtimeReport;
+    private GoogleCalendarConnection? _googleConnection;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -35,6 +37,13 @@ public partial class App : Application
 
         ConfigureLanguage(e.Args);
         _args = e.Args;
+
+        if (ReadArgumentValue(e.Args, "--google-report") is { } googleReport)
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            Shutdown(await GoogleConnectionVerifier.RunAsync(googleReport) ? 0 : 1);
+            return;
+        }
 
         if (ReadArgumentValue(e.Args, "--snooze-report") is { } snoozeReport)
         {
@@ -91,6 +100,7 @@ public partial class App : Application
             ShowSettings();
             return;
         }
+        _googleConnection = new GoogleCalendarConnection(directory);
 
         _runtimeReport = ReadArgumentValue(e.Args, "--runtime-report");
         if (_runtimeReport is not null && ReadArgumentValue(e.Args, "--data-dir") is null)
@@ -250,7 +260,7 @@ public partial class App : Application
             _settingsWindow.Activate();
             return;
         }
-        var window = new SettingsWindow(_store, _player!, _settings, AddTestNotifications);
+        var window = new SettingsWindow(_store, _player!, _settings, AddTestNotifications, _googleConnection);
         _settingsWindow = window;
         window.SettingsChanged += (_, _) =>
         {
@@ -269,6 +279,7 @@ public partial class App : Application
         _exiting = true;
         _reminderTimer?.Stop();
         _tray?.Dispose();
+        _googleConnection?.Dispose();
         _player?.Dispose();
         if (_instanceMutex is not null)
         {

@@ -8,6 +8,7 @@ using AlterGenesis.NotificationProbe.Interop;
 using AlterGenesis.NotificationProbe.Models;
 using AlterGenesis.NotificationProbe.Settings;
 using AlterGenesis.NotificationProbe.Diagnostics;
+using AlterGenesis.NotificationProbe.Google;
 
 namespace AlterGenesis.NotificationProbe;
 
@@ -19,13 +20,14 @@ public partial class SettingsWindow : Window
     private bool _ready;
 
     public SettingsWindow(AppSettingsStore store, INotificationSoundPlayer player,
-        AppSettings selectedSettings, Action showNotification)
+        AppSettings selectedSettings, Action showNotification, IGoogleCalendarConnection? google = null)
     {
         _store = store;
         _player = player;
         _showNotification = showNotification;
         SelectedSettings = selectedSettings;
         InitializeComponent();
+        GooglePanel.Initialize(google);
         RestoreSelection();
         SourceInitialized += (_, _) => DwmWindow.Apply(new WindowInteropHelper(this).Handle);
         Loaded += (_, _) => CardSizeChoice.Focus();
