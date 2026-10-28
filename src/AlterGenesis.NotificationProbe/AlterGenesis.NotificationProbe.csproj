@@ -3,6 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>AlterGenesis.NotificationProbe</AssemblyName>
@@ -11,6 +12,8 @@
     <Description>Isolated WPF probe for persistent Google Calendar notifications.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
     <EmbeddedResource Include="..\..\audio\candidates\2026-10-28\01-koron.wav" LogicalName="AlterGenesis.Sounds.Koron.wav" />
     <EmbeddedResource Include="..\..\audio\candidates\2026-10-28\02-kirari.wav" LogicalName="AlterGenesis.Sounds.Kirari.wav" />
     <EmbeddedResource Include="..\..\audio\candidates\2026-10-28\03-pikon.wav" LogicalName="AlterGenesis.Sounds.Pikon.wav" />

@@ -52,6 +52,7 @@ public partial class MainWindow : Window
         Width = layout.Width;
     }
     public event EventHandler? SettingsRequested;
+    internal event Action<NotificationItem, int?>? NotificationActionRequested;
 
     private void OpenSettingsClick(object sender, RoutedEventArgs e) =>
         SettingsRequested?.Invoke(this, EventArgs.Empty);
@@ -99,7 +100,7 @@ public partial class MainWindow : Window
     {
         if (sender is Button { Tag: NotificationItem notification })
         {
-            Notifications.Remove(notification);
+            NotificationActionRequested?.Invoke(notification, null);
         }
     }
 
@@ -139,15 +140,15 @@ public partial class MainWindow : Window
             {
                 IsLoaded: true,
                 SelectedIndex: > 0,
-                SelectedItem: ComboBoxItem { IsEnabled: true },
+                SelectedItem: ComboBoxItem { IsEnabled: true, Tag: string minutesText },
                 Tag: NotificationItem notification,
-            })
+            } combo || !int.TryParse(minutesText, out var minutes))
         {
             return;
         }
 
-        // Interaction preview only; scheduling and persistence belong to the next work unit.
-        Dispatcher.BeginInvoke(() => Notifications.Remove(notification));
+        combo.SelectedIndex = 0;
+        Dispatcher.BeginInvoke(() => NotificationActionRequested?.Invoke(notification, minutes));
     }
 
     private void OpenCalendarClick(object sender, RoutedEventArgs e)

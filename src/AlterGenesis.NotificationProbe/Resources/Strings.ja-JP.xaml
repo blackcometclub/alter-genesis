@@ -26,4 +26,8 @@
     <system:String x:Key="Text.SettingsSaveFailed">設定を保存できませんでした。選択を元に戻しました。</system:String>
     <system:String x:Key="Text.SettingsUnreadable">設定ファイルを読み込めません。元のファイルを保護するため、変更は保存しません。</system:String>
     <system:String x:Key="Text.AlreadyRunning">この保存先を使うALTER GENESISはすでに起動しています。</system:String>
+    <system:String x:Key="Text.Exit">終了</system:String>
+    <system:String x:Key="Text.NotificationsUnreadable">通知データを読み込めませんでした。元のファイルは変更していません。</system:String>
+    <system:String x:Key="Text.NotificationsSaveFailed">通知の変更を保存できませんでした。通知はそのまま残します。</system:String>
+    <system:String x:Key="Text.ReminderSaveFailed">再通知を保存できませんでした。予約を保ったまま、もう一度試します。</system:String>
 </ResourceDictionary>

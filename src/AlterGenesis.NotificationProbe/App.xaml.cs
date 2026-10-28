@@ -3,10 +3,13 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows;
+using System.Windows.Threading;
 using AlterGenesis.NotificationProbe.Diagnostics;
 using AlterGenesis.NotificationProbe.Effects;
 using AlterGenesis.NotificationProbe.Models;
 using AlterGenesis.NotificationProbe.Settings;
+using AlterGenesis.NotificationProbe.Notifications;
+using AlterGenesis.NotificationProbe.Interop;
 
 namespace AlterGenesis.NotificationProbe;
 
@@ -19,6 +22,12 @@ public partial class App : Application
     private MainWindow? _notificationWindow;
     private Mutex? _instanceMutex;
     private string[] _args = [];
+    private NotificationSchedule? _schedule;
+    private DispatcherTimer? _reminderTimer;
+    private TrayIcon? _tray;
+    private bool _exiting;
+    private bool _dueFailureShown;
+    private string? _runtimeReport;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -26,6 +35,12 @@ public partial class App : Application
 
         ConfigureLanguage(e.Args);
         _args = e.Args;
+
+        if (ReadArgumentValue(e.Args, "--snooze-report") is { } snoozeReport)
+        {
+            Shutdown(SnoozeVerifier.Run(snoozeReport) ? 0 : 1);
+            return;
+        }
 
         if (ReadArgumentValue(e.Args, "--resize-report") is { } resizeReport)
         {
@@ -71,35 +86,162 @@ public partial class App : Application
 
         _settings = _store.Load();
         _player = new WaveSoundPlayer();
-        if (e.Args.Contains("--settings", StringComparer.OrdinalIgnoreCase)
-            || ReadArgumentValue(e.Args, "--settings-layout-report") is not null)
+        if (ReadArgumentValue(e.Args, "--settings-layout-report") is not null)
+        {
             ShowSettings();
-        else ShowNotifications();
+            return;
+        }
+
+        _runtimeReport = ReadArgumentValue(e.Args, "--runtime-report");
+        if (_runtimeReport is not null && ReadArgumentValue(e.Args, "--data-dir") is null)
+        {
+            Shutdown(1);
+            return;
+        }
+        var notificationStore = new NotificationStore(directory);
+        var saved = notificationStore.Load();
+        if (notificationStore.LoadFailed)
+        {
+            ShowNotificationError("Text.NotificationsUnreadable");
+            Shutdown(1);
+            return;
+        }
+
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        _schedule = new NotificationSchedule(notificationStore, saved);
+        _tray = new TrayIcon((string)FindResource("Text.Settings"), (string)FindResource("Text.Exit"),
+            () => Dispatcher.Invoke(ShowSettings), () => Dispatcher.Invoke(() => RequestExit()));
+        _reminderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _reminderTimer.Tick += (_, _) => ReleaseDueNotifications();
+
+        var openSettings = e.Args.Contains("--settings", StringComparer.OrdinalIgnoreCase);
+        if (!notificationStore.HasFile && !openSettings
+            && !_schedule.TryAdd(SampleNotifications.Create(_args)))
+            ShowNotificationError("Text.NotificationsSaveFailed");
+        if (!_schedule.TryReleaseDue(out _))
+        {
+            _dueFailureShown = true;
+            ShowNotificationError("Text.ReminderSaveFailed");
+        }
+        if (openSettings || _schedule.Items.Count == 0) ShowSettings();
+        SynchronizeNotifications(_schedule.Visible);
     }
 
-    private void ShowNotifications()
+    private void AddTestNotifications()
     {
         var notifications = SampleNotifications.Create(_args);
-        var window = new MainWindow(notifications, cardSize: _settings.CardSize);
-        if (_args.Contains("--inspect", StringComparer.OrdinalIgnoreCase))
+        if (_schedule is null || !_schedule.TryAdd(notifications))
         {
-            window.ShowInTaskbar = true;
-            window.ShowActivated = true;
+            ShowNotificationError("Text.NotificationsSaveFailed");
+            return;
         }
-        window.SettingsRequested += (_, _) => ShowSettings();
-        window.Closed += (_, _) => { if (_notificationWindow == window) _notificationWindow = null; };
-        EventHandler? presented = null;
-        presented = async (_, _) =>
-        {
-            window.ContentRendered -= presented;
-            await new SoundNotificationEffect(_player!, () => _settings.Sound).OnNotificationPresentedAsync(notifications);
-        };
-        window.ContentRendered += presented;
-        var previous = _notificationWindow;
-        _notificationWindow = window;
-        window.Show();
-        previous?.Close();
+        SynchronizeNotifications(notifications);
     }
+
+    private void NotificationAction(NotificationItem item, int? minutes)
+    {
+        if (_schedule is null) return;
+        var saved = minutes is { } delay ? _schedule.TrySnooze(item.Id, delay) : _schedule.TryDismiss(item.Id);
+        if (!saved)
+        {
+            ShowNotificationError("Text.NotificationsSaveFailed");
+            return;
+        }
+        SynchronizeNotifications([]);
+    }
+
+    private void ReleaseDueNotifications()
+    {
+        if (_schedule is null || _exiting) return;
+        if (!_schedule.TryReleaseDue(out var presented))
+        {
+            if (!_dueFailureShown)
+            {
+                _dueFailureShown = true;
+                ShowNotificationError("Text.ReminderSaveFailed");
+            }
+            return;
+        }
+        _dueFailureShown = false;
+        if (presented.Count > 0) SynchronizeNotifications(presented);
+    }
+
+    private void SynchronizeNotifications(IReadOnlyCollection<NotificationItem> presented)
+    {
+        if (_schedule is null || _exiting) return;
+        _reminderTimer!.IsEnabled = _schedule.HasPending;
+        var visible = _schedule.Visible;
+        if (visible.Count == 0)
+            _notificationWindow?.Close();
+        else if (_notificationWindow is null)
+        {
+            var window = new MainWindow(visible, cardSize: _settings.CardSize);
+            if (_args.Contains("--inspect", StringComparer.OrdinalIgnoreCase))
+            {
+                window.ShowInTaskbar = true;
+                window.ShowActivated = true;
+            }
+            window.SettingsRequested += (_, _) => ShowSettings();
+            window.NotificationActionRequested += NotificationAction;
+            window.Closed += (_, _) =>
+            {
+                _notificationWindow = null;
+                // Closing the whole panel exits; its unacknowledged cards stay saved.
+                if (!_exiting && _schedule.Visible.Count > 0) RequestExit();
+                else MaybeExit();
+            };
+            _notificationWindow = window;
+            window.Show();
+        }
+        else
+        {
+            var wanted = visible.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+            var existing = _notificationWindow.Notifications.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+            foreach (var item in visible.Where(item => !existing.Contains(item.Id)))
+                _notificationWindow.Notifications.Add(item);
+            foreach (var obsolete in _notificationWindow.Notifications.Where(item => !wanted.Contains(item.Id)).ToArray())
+                _notificationWindow.Notifications.Remove(obsolete);
+        }
+        PresentAfterRender(presented);
+        MaybeExit();
+    }
+
+    private async void PresentAfterRender(IReadOnlyCollection<NotificationItem> presented)
+    {
+        if (presented.Count == 0) return;
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        if (_exiting) return;
+        await new SoundNotificationEffect(_player!, () => _settings.Sound).OnNotificationPresentedAsync(presented);
+        if (_runtimeReport is { } path && _notificationWindow is { } window)
+        {
+            var layout = LayoutVerifier.Capture(window);
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+            File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(new
+            {
+                Passed = layout.Passed, VisibleIds = _schedule!.Visible.Select(item => item.Id).ToArray(),
+                PendingCount = _schedule.Items.Count(item => item.Status == NotificationStatus.Snoozed),
+                Layout = layout,
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            LayoutVerifier.WritePreview(window, path);
+            RequestExit();
+        }
+    }
+
+    private void MaybeExit()
+    {
+        if (!_exiting && _schedule is not null && !_schedule.HasPending
+            && _notificationWindow is null && _settingsWindow is null) RequestExit();
+    }
+
+    private void RequestExit()
+    {
+        if (_exiting) return;
+        _exiting = true;
+        Shutdown();
+    }
+
+    private void ShowNotificationError(string key) => MessageBox.Show((string)FindResource(key),
+        "ALTER GENESIS", MessageBoxButton.OK, MessageBoxImage.None);
 
     private void ShowSettings()
     {
@@ -108,7 +250,7 @@ public partial class App : Application
             _settingsWindow.Activate();
             return;
         }
-        var window = new SettingsWindow(_store, _player!, _settings, ShowNotifications);
+        var window = new SettingsWindow(_store, _player!, _settings, AddTestNotifications);
         _settingsWindow = window;
         window.SettingsChanged += (_, _) =>
         {
@@ -116,7 +258,7 @@ public partial class App : Application
             _settings = window.SelectedSettings;
             if (sizeChanged) _notificationWindow?.SetCardSize(_settings.CardSize);
         };
-        window.Closed += (_, _) => _settingsWindow = null;
+        window.Closed += (_, _) => { _settingsWindow = null; MaybeExit(); };
         if (ReadArgumentValue(_args, "--settings-layout-report") is { } report)
             window.ContentRendered += (_, _) => Shutdown(window.WriteLayoutReport(report) ? 0 : 1);
         window.Show();
@@ -124,6 +266,9 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _exiting = true;
+        _reminderTimer?.Stop();
+        _tray?.Dispose();
         _player?.Dispose();
         if (_instanceMutex is not null)
         {

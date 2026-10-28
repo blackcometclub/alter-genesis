@@ -26,4 +26,8 @@
     <system:String x:Key="Text.SettingsSaveFailed">Settings could not be saved. The previous selection has been restored.</system:String>
     <system:String x:Key="Text.SettingsUnreadable">The settings file could not be read. Changes will not be saved to protect the original file.</system:String>
     <system:String x:Key="Text.AlreadyRunning">ALTER GENESIS is already running with this data folder.</system:String>
+    <system:String x:Key="Text.Exit">Exit</system:String>
+    <system:String x:Key="Text.NotificationsUnreadable">Notification data could not be read. The original file has not been changed.</system:String>
+    <system:String x:Key="Text.NotificationsSaveFailed">The notification change could not be saved. The notification will remain visible.</system:String>
+    <system:String x:Key="Text.ReminderSaveFailed">The reminder could not be saved. Its reservation will be kept and retried.</system:String>
 </ResourceDictionary>
