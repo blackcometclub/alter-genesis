@@ -1,13 +1,16 @@
 using System.IO;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;
 using AlterGenesis.NotificationProbe.Effects;
 using AlterGenesis.NotificationProbe.Interop;
 using AlterGenesis.NotificationProbe.Models;
 using AlterGenesis.NotificationProbe.Settings;
 using AlterGenesis.NotificationProbe.Diagnostics;
+using AlterGenesis.NotificationProbe.Calendars;
 
 namespace AlterGenesis.NotificationProbe;
 
@@ -16,23 +19,39 @@ public partial class SettingsWindow : Window
     private readonly AppSettingsStore _store;
     private readonly INotificationSoundPlayer _player;
     private readonly Action _showNotification;
+    private readonly IcalCalendarStore _calendarStore;
+    private readonly IcalFeedClient _icalClient;
     private bool _ready;
+    private bool _calendarLoadErrorShown;
 
     public SettingsWindow(AppSettingsStore store, INotificationSoundPlayer player,
-        AppSettings selectedSettings, Action showNotification)
+        AppSettings selectedSettings, Action showNotification,
+        IcalCalendarStore calendarStore, IcalFeedClient icalClient)
     {
         _store = store;
         _player = player;
         _showNotification = showNotification;
+        _calendarStore = calendarStore;
+        _icalClient = icalClient;
         SelectedSettings = selectedSettings;
+        CalendarSubscriptions = new ObservableCollection<IcalCalendarSubscription>(_calendarStore.Load());
         InitializeComponent();
         RestoreSelection();
         SourceInitialized += (_, _) => DwmWindow.Apply(new WindowInteropHelper(this).Handle);
-        Loaded += (_, _) => CardSizeChoice.Focus();
+        Loaded += (_, _) =>
+        {
+            CardSizeChoice.Focus();
+            if (_calendarStore.LoadFailed && !_calendarLoadErrorShown)
+            {
+                _calendarLoadErrorShown = true;
+                ShowError("Text.CalendarStoreUnreadable");
+            }
+        };
         _ready = true;
     }
 
     public AppSettings SelectedSettings { get; private set; }
+    public ObservableCollection<IcalCalendarSubscription> CalendarSubscriptions { get; }
     public event EventHandler? SettingsChanged;
 
     private void SoundSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -88,6 +107,62 @@ public partial class SettingsWindow : Window
 
     private void TestNotificationClick(object sender, RoutedEventArgs e) => _showNotification();
 
+    private void AddCalendarClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new AddIcalCalendarWindow(_icalClient) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is not { } calendar) return;
+        if (CalendarSubscriptions.Any(existing => string.Equals(existing.Id, calendar.Id, StringComparison.Ordinal)))
+        {
+            ShowError("Text.CalendarAlreadyAdded");
+            return;
+        }
+        var next = CalendarSubscriptions.Append(calendar).ToArray();
+        if (!_calendarStore.TrySave(next))
+        {
+            ShowError(_calendarStore.LoadFailed ? "Text.CalendarStoreUnreadable" : "Text.CalendarSaveFailed");
+            return;
+        }
+        CalendarSubscriptions.Add(calendar);
+    }
+
+    private async void RefreshCalendarClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.CommandParameter is not IcalCalendarSubscription calendar) return;
+        button.IsEnabled = false;
+        try
+        {
+            _ = await _icalClient.ReadAsync(calendar.SecretUrl);
+            MessageBox.Show(this, (string)FindResource("Text.CalendarRefreshSucceeded"),
+                (string)FindResource("Text.SettingsTitle"), MessageBoxButton.OK, MessageBoxImage.None);
+        }
+        catch (IcalFeedException exception)
+        {
+            ShowError(exception.Error switch
+            {
+                IcalFeedError.AccessDenied => "Text.CalendarAccessDenied",
+                IcalFeedError.TooLarge => "Text.CalendarTooLarge",
+                IcalFeedError.InvalidCalendar => "Text.CalendarInvalid",
+                _ => "Text.CalendarConnectionFailed",
+            });
+        }
+        finally { button.IsEnabled = true; }
+    }
+
+    private void RemoveCalendarClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.CommandParameter is not IcalCalendarSubscription calendar) return;
+        var prompt = string.Format((string)FindResource("Text.CalendarRemoveConfirm"), calendar.Name);
+        if (MessageBox.Show(this, prompt, (string)FindResource("Text.SettingsTitle"),
+                MessageBoxButton.YesNo, MessageBoxImage.None) != MessageBoxResult.Yes) return;
+        var next = CalendarSubscriptions.Where(existing => !string.Equals(existing.Id, calendar.Id, StringComparison.Ordinal)).ToArray();
+        if (!_calendarStore.TrySave(next))
+        {
+            ShowError(_calendarStore.LoadFailed ? "Text.CalendarStoreUnreadable" : "Text.CalendarSaveFailed");
+            return;
+        }
+        CalendarSubscriptions.Remove(calendar);
+    }
+
     private void ShowError(string key) => MessageBox.Show(this, (string)FindResource(key),
         (string)FindResource("Text.SettingsTitle"), MessageBoxButton.OK, MessageBoxImage.None);
 
@@ -96,19 +171,37 @@ public partial class SettingsWindow : Window
         var choice = SoundChoice.TranslatePoint(new Point(), this);
         var preview = PreviewButton.TranslatePoint(new Point(), this);
         var test = TestNotificationButton.TranslatePoint(new Point(), this);
+        var add = AddCalendarButton.TranslatePoint(new Point(), this);
         var sizeChoice = CardSizeChoice.TranslatePoint(new Point(), this);
         var expectedHeight = (double)FindResource("Dimension.ControlHeight");
         var topDifference = Math.Abs(choice.Y - preview.Y);
         var bottomDifference = Math.Abs(choice.Y + SoundChoice.ActualHeight - preview.Y - PreviewButton.ActualHeight);
         var rightDifference = Math.Abs(preview.X + PreviewButton.ActualWidth - test.X - TestNotificationButton.ActualWidth);
+        var calendarRightDifference = Math.Abs(add.X + AddCalendarButton.ActualWidth - test.X - TestNotificationButton.ActualWidth);
         var choiceLeftDifference = Math.Abs(sizeChoice.X - choice.X);
         var choiceWidthDifference = Math.Abs(CardSizeChoice.ActualWidth - SoundChoice.ActualWidth);
+        var rowButtons = FindVisualChildren<Button>(CalendarList)
+            .Where(button => button.CommandParameter is IcalCalendarSubscription).Take(2).ToArray();
+        var calendarRowTopDifference = 0d;
+        var calendarRowBottomDifference = 0d;
+        var calendarRowHeightDifference = 0d;
+        if (rowButtons.Length == 2)
+        {
+            var first = rowButtons[0].TranslatePoint(new Point(), this);
+            var second = rowButtons[1].TranslatePoint(new Point(), this);
+            calendarRowTopDifference = Math.Abs(first.Y - second.Y);
+            calendarRowBottomDifference = Math.Abs(first.Y + rowButtons[0].ActualHeight - second.Y - rowButtons[1].ActualHeight);
+            calendarRowHeightDifference = Math.Max(Math.Abs(rowButtons[0].ActualHeight - expectedHeight),
+                Math.Abs(rowButtons[1].ActualHeight - expectedHeight));
+        }
         var passed = topDifference <= 1 && bottomDifference <= 1 && rightDifference <= 1
             && Math.Abs(SoundChoice.ActualHeight - expectedHeight) <= 1
             && Math.Abs(PreviewButton.ActualHeight - expectedHeight) <= 1
             && Math.Abs(TestNotificationButton.ActualHeight - expectedHeight) <= 1
+            && Math.Abs(AddCalendarButton.ActualHeight - expectedHeight) <= 1
             && Math.Abs(CardSizeChoice.ActualHeight - expectedHeight) <= 1
-            && choiceLeftDifference <= 1 && choiceWidthDifference <= 1;
+            && choiceLeftDifference <= 1 && choiceWidthDifference <= 1 && calendarRightDifference <= 1
+            && calendarRowTopDifference <= 1 && calendarRowBottomDifference <= 1 && calendarRowHeightDifference <= 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllText(path, JsonSerializer.Serialize(new
         {
@@ -117,9 +210,24 @@ public partial class SettingsWindow : Window
             ChoiceWidthDifference = choiceWidthDifference,
             ControlHeight = expectedHeight, TopDifference = topDifference,
             BottomDifference = bottomDifference, RightDifference = rightDifference,
+            CalendarRightDifference = calendarRightDifference,
+            CalendarCount = CalendarSubscriptions.Count,
+            CalendarRowTopDifference = calendarRowTopDifference,
+            CalendarRowBottomDifference = calendarRowBottomDifference,
+            CalendarRowHeightDifference = calendarRowHeightDifference,
             Width = ActualWidth, Height = ActualHeight,
         }, new JsonSerializerOptions { WriteIndented = true }));
         LayoutVerifier.WritePreview(this, path);
         return passed;
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is T match) yield return match;
+            foreach (var nested in FindVisualChildren<T>(child)) yield return nested;
+        }
     }
 }

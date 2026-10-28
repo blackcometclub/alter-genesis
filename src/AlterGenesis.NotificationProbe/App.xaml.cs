@@ -10,6 +10,7 @@ using AlterGenesis.NotificationProbe.Models;
 using AlterGenesis.NotificationProbe.Settings;
 using AlterGenesis.NotificationProbe.Notifications;
 using AlterGenesis.NotificationProbe.Interop;
+using AlterGenesis.NotificationProbe.Calendars;
 
 namespace AlterGenesis.NotificationProbe;
 
@@ -18,6 +19,8 @@ public partial class App : Application
     private WaveSoundPlayer? _player;
     private AppSettingsStore _store = null!;
     private AppSettings _settings = AppSettings.Default;
+    private IcalCalendarStore _calendarStore = null!;
+    private readonly IcalFeedClient _icalClient = new();
     private SettingsWindow? _settingsWindow;
     private MainWindow? _notificationWindow;
     private Mutex? _instanceMutex;
@@ -39,6 +42,24 @@ public partial class App : Application
         if (ReadArgumentValue(e.Args, "--snooze-report") is { } snoozeReport)
         {
             Shutdown(SnoozeVerifier.Run(snoozeReport) ? 0 : 1);
+            return;
+        }
+
+        if (ReadArgumentValue(e.Args, "--ical-report") is { } icalReport)
+        {
+            Shutdown(await IcalVerifier.RunAsync(icalReport) ? 0 : 1);
+            return;
+        }
+
+        if (ReadArgumentValue(e.Args, "--calendar-add-layout-report") is { } calendarAddLayoutReport)
+        {
+            var details = string.Equals(ReadArgumentValue(e.Args, "--calendar-add-step"), "details",
+                StringComparison.OrdinalIgnoreCase);
+            var window = new AddIcalCalendarWindow(_icalClient);
+            if (details) window.ShowDetailsForLayout();
+            window.ContentRendered += (_, _) => Shutdown(window.WriteLayoutReport(calendarAddLayoutReport, details) ? 0 : 1);
+            MainWindow = window;
+            window.Show();
             return;
         }
 
@@ -69,6 +90,7 @@ public partial class App : Application
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "TINMOON", "AlterGenesis.NotificationProbe");
         _store = new AppSettingsStore(directory);
+        _calendarStore = new IcalCalendarStore(directory);
         var identity = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar).ToUpperInvariant();
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
         _instanceMutex = new Mutex(false, @"Local\TINMOON.AlterGenesis.NotificationProbe." + key);
@@ -250,7 +272,8 @@ public partial class App : Application
             _settingsWindow.Activate();
             return;
         }
-        var window = new SettingsWindow(_store, _player!, _settings, AddTestNotifications);
+        var window = new SettingsWindow(_store, _player!, _settings, AddTestNotifications,
+            _calendarStore, _icalClient);
         _settingsWindow = window;
         window.SettingsChanged += (_, _) =>
         {
@@ -270,6 +293,7 @@ public partial class App : Application
         _reminderTimer?.Stop();
         _tray?.Dispose();
         _player?.Dispose();
+        _icalClient.Dispose();
         if (_instanceMutex is not null)
         {
             _instanceMutex.ReleaseMutex();

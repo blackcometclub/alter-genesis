@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:effects="clr-namespace:AlterGenesis.NotificationProbe.Effects"
         xmlns:models="clr-namespace:AlterGenesis.NotificationProbe.Models"
+        xmlns:calendars="clr-namespace:AlterGenesis.NotificationProbe.Calendars"
         Title="{DynamicResource Text.SettingsTitle}"
         Width="408" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
@@ -17,6 +18,12 @@
             <RowDefinition Height="8" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="24" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="24" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="8" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="8" />
             <RowDefinition Height="Auto" />
@@ -54,7 +61,39 @@
                     Style="{StaticResource Style.CloseButton}"
                     AutomationProperties.AutomationId="PreviewSound" />
         </Grid>
-        <Button Grid.Row="8" x:Name="TestNotificationButton" HorizontalAlignment="Right"
+        <TextBlock Grid.Row="8" Text="{DynamicResource Text.GoogleCalendars}" FontSize="14" />
+        <ItemsControl Grid.Row="10" x:Name="CalendarList"
+                      ItemsSource="{Binding CalendarSubscriptions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type calendars:IcalCalendarSubscription}">
+                    <Grid Height="32" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="56" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="56" />
+                        </Grid.ColumnDefinitions>
+                        <Border Background="{Binding ColorBrush}" CornerRadius="3" />
+                        <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" FontSize="13" />
+                        <Button Grid.Column="4" Content="{DynamicResource Text.UpdateCalendar}"
+                                Click="RefreshCalendarClick" CommandParameter="{Binding}"
+                                Style="{StaticResource Style.SecondaryButton}" />
+                        <Button Grid.Column="6" Content="{DynamicResource Text.RemoveCalendar}"
+                                Click="RemoveCalendarClick" CommandParameter="{Binding}"
+                                Style="{StaticResource Style.SecondaryButton}" />
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Grid.Row="12" x:Name="AddCalendarButton" HorizontalAlignment="Right"
+                Content="{DynamicResource Text.AddCalendar}" Click="AddCalendarClick"
+                Style="{StaticResource Style.CloseButton}"
+                AutomationProperties.AutomationId="AddCalendar" />
+        <Button Grid.Row="14" x:Name="TestNotificationButton" HorizontalAlignment="Right"
                 Content="{DynamicResource Text.TestNotification}" Click="TestNotificationClick"
                 Style="{StaticResource Style.CloseButton}"
                 AutomationProperties.AutomationId="TestNotification" />

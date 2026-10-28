@@ -188,6 +188,35 @@
         </Setter>
     </Style>
 
+    <Style x:Key="Style.SecondaryButton" TargetType="Button" BasedOn="{StaticResource Style.CloseButton}">
+        <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}" />
+    </Style>
+
+    <Style x:Key="Style.CompactTextBox" TargetType="TextBox">
+        <Setter Property="Height" Value="{StaticResource Dimension.ControlHeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Style.ControlFocusVisual}" />
+    </Style>
+
+    <Style x:Key="Style.CompactPasswordBox" TargetType="PasswordBox">
+        <Setter Property="Height" Value="{StaticResource Dimension.ControlHeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Style.ControlFocusVisual}" />
+    </Style>
+
     <ControlTemplate x:Key="Template.ComboBoxToggle" TargetType="ToggleButton">
         <Border x:Name="ToggleBorder"
                 Background="{DynamicResource Brush.SurfaceRaised}"
