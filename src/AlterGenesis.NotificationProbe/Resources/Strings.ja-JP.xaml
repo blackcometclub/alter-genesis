@@ -1,0 +1,13 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=System.Runtime">
+    <system:String x:Key="Text.OpenCalendar">Googleカレンダーで開く</system:String>
+    <system:String x:Key="Text.SnoozeAccessibleName">再通知までの時間</system:String>
+    <system:String x:Key="Text.Snooze">再通知</system:String>
+    <system:String x:Key="Text.Snooze5Minutes">5分後</system:String>
+    <system:String x:Key="Text.Snooze10Minutes">10分後</system:String>
+    <system:String x:Key="Text.Snooze30Minutes">30分後</system:String>
+    <system:String x:Key="Text.Snooze1Hour">1時間後</system:String>
+    <system:String x:Key="Text.SnoozeAtTime">時刻を指定…</system:String>
+    <system:String x:Key="Text.Close">閉じる</system:String>
+</ResourceDictionary>

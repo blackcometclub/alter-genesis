@@ -1,0 +1,13 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=System.Runtime">
+    <system:String x:Key="Text.OpenCalendar">Open in Google Calendar</system:String>
+    <system:String x:Key="Text.SnoozeAccessibleName">Snooze duration</system:String>
+    <system:String x:Key="Text.Snooze">Snooze</system:String>
+    <system:String x:Key="Text.Snooze5Minutes">In 5 minutes</system:String>
+    <system:String x:Key="Text.Snooze10Minutes">In 10 minutes</system:String>
+    <system:String x:Key="Text.Snooze30Minutes">In 30 minutes</system:String>
+    <system:String x:Key="Text.Snooze1Hour">In 1 hour</system:String>
+    <system:String x:Key="Text.SnoozeAtTime">At a time…</system:String>
+    <system:String x:Key="Text.Close">Close</system:String>
+</ResourceDictionary>
