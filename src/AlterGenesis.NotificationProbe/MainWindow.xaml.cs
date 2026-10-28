@@ -19,10 +19,12 @@ public partial class MainWindow : Window
 
     public MainWindow(
         IReadOnlyCollection<NotificationItem> notifications,
-        string? layoutReportPath = null)
+        string? layoutReportPath = null,
+        NotificationCardSize cardSize = NotificationCardSize.Small)
     {
         Notifications = new ObservableCollection<NotificationItem>(notifications);
         _layoutReportPath = layoutReportPath;
+        SetCardSize(cardSize);
 
         InitializeComponent();
         DataContext = this;
@@ -30,10 +32,18 @@ public partial class MainWindow : Window
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         ContentRendered += OnContentRendered;
+        SizeChanged += (_, _) => { if (IsLoaded) PositionAtWorkAreaBottomRight(); };
         Notifications.CollectionChanged += OnNotificationsChanged;
     }
 
     public ObservableCollection<NotificationItem> Notifications { get; }
+    public NotificationCardSize CardSize { get; private set; }
+
+    public void SetCardSize(NotificationCardSize size)
+    {
+        CardSize = size;
+        NotificationCardLayout.For(size).Apply(Resources);
+    }
     public event EventHandler? SettingsRequested;
 
     private void OpenSettingsClick(object sender, RoutedEventArgs e) =>
@@ -62,6 +72,7 @@ public partial class MainWindow : Window
         {
             var report = LayoutVerifier.Capture(this);
             LayoutVerifier.Write(_layoutReportPath, report);
+            LayoutVerifier.WritePreview(this, _layoutReportPath);
             Application.Current.Shutdown(report.Passed ? 0 : 1);
         }, DispatcherPriority.ApplicationIdle);
     }

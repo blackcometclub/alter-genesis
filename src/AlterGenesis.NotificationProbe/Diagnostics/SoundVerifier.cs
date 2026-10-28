@@ -29,25 +29,27 @@ internal static class SoundVerifier
 
         Check("New settings default to Koron without creating a file", () =>
         {
-            var store = new SoundSettingsStore(Path.Combine(fixtures, "new"));
-            Require(store.Load() == NotificationSound.Koron && !File.Exists(store.FilePath));
+            var store = new AppSettingsStore(Path.Combine(fixtures, "new"));
+            Require(store.Load() == AppSettings.Default && !File.Exists(store.FilePath));
         });
         Check("All four choices survive save and reopen; temporary files are removed", () =>
         {
             var directory = Path.Combine(fixtures, "roundtrip");
             foreach (var sound in Enum.GetValues<NotificationSound>())
             {
-                var store = new SoundSettingsStore(directory);
+                var store = new AppSettingsStore(directory);
                 store.Load();
-                Require(store.TrySave(sound));
-                Require(new SoundSettingsStore(directory).Load() == sound);
+                Require(store.TrySave(AppSettings.Default with { Sound = sound }));
+                Require(new AppSettingsStore(directory).Load().Sound == sound);
             }
             Require(Directory.GetFiles(directory).Length == 1);
         });
         var invalidCases = new[] { "{broken", "null", "{}",
             "{\"Version\":2,\"Sound\":\"Koron\"}",
             "{\"Version\":1,\"Sound\":\"Unknown\"}",
-            "{\"Version\":1,\"Sound\":99}" };
+            "{\"Version\":1,\"Sound\":99}",
+            "{\"Version\":1,\"Sound\":\"Koron\",\"CardSize\":\"Unknown\"}",
+            "{\"Version\":1,\"Sound\":\"Koron\",\"CardSize\":99}" };
         for (var index = 0; index < invalidCases.Length; index++)
         {
             var caseIndex = index;
@@ -55,22 +57,45 @@ internal static class SoundVerifier
             {
                 var directory = Path.Combine(fixtures, $"invalid-{caseIndex}");
                 Directory.CreateDirectory(directory);
-                var store = new SoundSettingsStore(directory);
+                var store = new AppSettingsStore(directory);
                 File.WriteAllText(store.FilePath, invalidCases[caseIndex]);
-                Require(store.Load() == NotificationSound.None && store.LoadFailed);
-                Require(!store.TrySave(NotificationSound.Pikon));
+                Require(store.Load().Sound == NotificationSound.None && store.LoadFailed);
+                Require(!store.TrySave(AppSettings.Default with { Sound = NotificationSound.Pikon }));
                 Require(File.ReadAllText(store.FilePath) == invalidCases[caseIndex]);
             });
         }
         Check("Failed replacement preserves previous settings and removes temporary files", () =>
         {
             var directory = Path.Combine(fixtures, "locked");
-            var store = new SoundSettingsStore(directory);
-            Require(store.TrySave(NotificationSound.Kirari));
+            var store = new AppSettingsStore(directory);
+            Require(store.TrySave(AppSettings.Default with { Sound = NotificationSound.Kirari }));
             using (var locked = new FileStream(store.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                Require(!store.TrySave(NotificationSound.Pikon));
-            Require(new SoundSettingsStore(directory).Load() == NotificationSound.Kirari);
+                Require(!store.TrySave(AppSettings.Default with { Sound = NotificationSound.Pikon }));
+            Require(new AppSettingsStore(directory).Load().Sound == NotificationSound.Kirari);
             Require(Directory.GetFiles(directory).Length == 1);
+        });
+        Check("Legacy sound settings preserve sound and the large layout without rewriting", () =>
+        {
+            var directory = Path.Combine(fixtures, "legacy");
+            Directory.CreateDirectory(directory);
+            var store = new AppSettingsStore(directory);
+            const string original = "{\"Version\":1,\"Sound\":\"Pikon\"}";
+            File.WriteAllText(store.FilePath, original);
+            var settings = store.Load();
+            Require(settings.Sound == NotificationSound.Pikon && settings.CardSize == NotificationCardSize.Large);
+            Require(File.ReadAllText(store.FilePath) == original);
+            Require(store.TrySave(settings with { CardSize = NotificationCardSize.Small }));
+            Require(new AppSettingsStore(directory).Load() == (settings with { CardSize = NotificationCardSize.Small }));
+        });
+        Check("Both sizes survive reopening while preserving sound", () =>
+        {
+            var directory = Path.Combine(fixtures, "sizes");
+            foreach (var size in Enum.GetValues<NotificationCardSize>())
+            {
+                var settings = AppSettings.Default with { Sound = NotificationSound.Kirari, CardSize = size };
+                Require(new AppSettingsStore(directory).TrySave(settings));
+                Require(new AppSettingsStore(directory).Load() == settings);
+            }
         });
         Check("Every embedded sound is 48 kHz / 16-bit / mono PCM with silent endpoints", () =>
         {

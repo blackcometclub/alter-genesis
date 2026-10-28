@@ -2,10 +2,18 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AlterGenesis.NotificationProbe.Effects;
+using AlterGenesis.NotificationProbe.Models;
 
 namespace AlterGenesis.NotificationProbe.Settings;
 
-public sealed class SoundSettingsStore(string directory)
+public sealed record AppSettings(int Version, NotificationSound Sound,
+    NotificationCardSize CardSize = NotificationCardSize.Large)
+{
+    // Missing CardSize in older settings retains the previous large layout.
+    public static AppSettings Default => new(1, NotificationSound.Koron, NotificationCardSize.Small);
+}
+
+public sealed class AppSettingsStore(string directory)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -16,35 +24,36 @@ public sealed class SoundSettingsStore(string directory)
     public string FilePath { get; } = Path.Combine(Path.GetFullPath(directory), "settings.json");
     public bool LoadFailed { get; private set; }
 
-    public NotificationSound Load()
+    public AppSettings Load()
     {
         try
         {
-            var settings = JsonSerializer.Deserialize<SoundSettings>(File.ReadAllText(FilePath), JsonOptions);
-            if (settings is not { Version: 1 } || !Enum.IsDefined(settings.Sound))
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions);
+            if (settings is not { Version: 1 } || !Enum.IsDefined(settings.Sound) || !Enum.IsDefined(settings.CardSize))
                 throw new InvalidDataException("Unsupported sound settings.");
-            return settings.Sound;
+            return settings;
         }
         catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
         {
-            return NotificationSound.Koron;
+            return AppSettings.Default;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidDataException)
         {
             // Preserve unreadable, malformed and newer-version files; do not overwrite them.
             LoadFailed = true;
-            return NotificationSound.None;
+            return AppSettings.Default with { Sound = NotificationSound.None };
         }
     }
 
-    public bool TrySave(NotificationSound sound)
+    public bool TrySave(AppSettings settings)
     {
-        if (LoadFailed || !Enum.IsDefined(sound)) return false;
+        if (LoadFailed || settings.Version != 1 || !Enum.IsDefined(settings.Sound) || !Enum.IsDefined(settings.CardSize))
+            return false;
         var temporaryPath = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-            var bytes = JsonSerializer.SerializeToUtf8Bytes(new SoundSettings(1, sound), JsonOptions);
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
             using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 stream.Write(bytes);
@@ -66,5 +75,4 @@ public sealed class SoundSettingsStore(string directory)
         }
     }
 
-    private sealed record SoundSettings(int Version, NotificationSound Sound);
 }

@@ -4,6 +4,8 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using AlterGenesis.NotificationProbe.Models;
 
 namespace AlterGenesis.NotificationProbe.Diagnostics;
 
@@ -24,6 +26,9 @@ internal static class LayoutVerifier
         var titleTexts = FindByAutomationId<TextBlock>(elements, "EventTitle");
 
         var rows = items.Select(item => MeasureControlRow(item, window)).ToList();
+        var expectedRowHeight = window.CardSize == NotificationCardSize.Small ? 128 : 152;
+        var expectedWidth = window.CardSize == NotificationCardSize.Small ? 480 : 560;
+        var expectedMaxHeight = window.CardSize == NotificationCardSize.Small ? 514 : 602;
         var checks = new Dictionary<string, bool>
         {
             ["bandWidth40"] = bands.Count > 0 && bands.All(band => Near(band.ActualWidth, 40)),
@@ -31,7 +36,10 @@ internal static class LayoutVerifier
                 && snoozeControls.All(control => Near(control.ActualHeight, 32))
                 && closeButtons.All(button => Near(button.ActualHeight, 32)),
             ["controlEdgesAligned"] = rows.Count > 0 && rows.All(row => row.MaximumEdgeDelta <= Tolerance),
-            ["eventMinimumHeight152"] = items.Count > 0 && items.All(item => item.ActualHeight >= 152 - Tolerance),
+            ["eventHeightMatchesSize"] = items.Count > 0 && items.All(item => Near(item.ActualHeight, expectedRowHeight)),
+            ["windowWidthMatchesSize"] = Near(window.ActualWidth, expectedWidth),
+            ["windowHeightMatchesSize"] = Near(window.ActualHeight,
+                Math.Min(items.Count * (expectedRowHeight + 1) + 2, expectedMaxHeight)),
             ["timeFont28"] = timeTexts.Count > 0 && timeTexts.All(text => Near(text.FontSize, 28)),
             ["titleFont26"] = titleTexts.Count > 0 && titleTexts.All(text => Near(text.FontSize, 26)),
             ["itemCountsMatch"] = items.Count == bands.Count
@@ -63,6 +71,21 @@ internal static class LayoutVerifier
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         }));
+    }
+
+    internal static void WritePreview(Window window, string reportPath)
+    {
+        var content = (FrameworkElement)window.Content;
+        // Render the WPF client area only; native title bars are outside this visual.
+        var width = content.ActualWidth + content.Margin.Left + content.Margin.Right;
+        var height = content.ActualHeight + content.Margin.Top + content.Margin.Bottom;
+        var image = new RenderTargetBitmap((int)Math.Ceiling(width),
+            (int)Math.Ceiling(height), 96, 96, PixelFormats.Pbgra32);
+        image.Render(window);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(image));
+        using var output = File.Create(Path.ChangeExtension(reportPath, ".png"));
+        encoder.Save(output);
     }
 
     private static ControlRowMetrics MeasureControlRow(Grid item, Window window)

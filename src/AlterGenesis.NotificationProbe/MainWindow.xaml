@@ -4,9 +4,9 @@
         xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="ALTER GENESIS — Notification Probe"
-        Width="560"
+        Width="{DynamicResource Card.Width}"
         SizeToContent="Height"
-        MaxHeight="602"
+        MaxHeight="{DynamicResource Card.MaxWindowHeight}"
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
@@ -36,7 +36,7 @@
             BorderBrush="{DynamicResource Brush.Border}"
             BorderThickness="1"
             CornerRadius="16">
-        <ScrollViewer MaxHeight="600"
+        <ScrollViewer MaxHeight="{DynamicResource Card.ViewportHeight}"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       PanningMode="VerticalOnly">
@@ -45,7 +45,7 @@
                     <DataTemplate>
                         <Border BorderBrush="{DynamicResource Brush.Divider}"
                                 BorderThickness="0,0,0,1">
-                            <Grid MinHeight="152"
+                            <Grid MinHeight="{DynamicResource Card.RowHeight}"
                                   automation:AutomationProperties.AutomationId="NotificationItem"
                                   automation:AutomationProperties.Name="{Binding Title}">
                                 <Grid.ColumnDefinitions>
@@ -57,17 +57,17 @@
                                         Background="{Binding CalendarBrush}"
                                         automation:AutomationProperties.AutomationId="CalendarBand" />
 
-                                <Grid Grid.Column="1" Margin="24,20">
+                                <Grid Grid.Column="1" Margin="{DynamicResource Card.ContentPadding}">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="12" />
+                                        <RowDefinition Height="{DynamicResource Card.RowGap}" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <Grid Grid.Row="0" MinHeight="68">
+                                    <Grid Grid.Row="0" MinHeight="{DynamicResource Card.HeadingHeight}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="84" />
-                                            <ColumnDefinition Width="16" />
+                                            <ColumnDefinition Width="{DynamicResource Card.TitleGap}" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
 

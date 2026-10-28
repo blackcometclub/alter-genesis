@@ -13,6 +13,9 @@
     <system:String x:Key="Text.Settings">Settings</system:String>
     <system:String x:Key="Text.SettingsTitle">Settings — ALTER GENESIS</system:String>
     <system:String x:Key="Text.NotificationSound">Notification sound</system:String>
+    <system:String x:Key="Text.CardSize">Card size</system:String>
+    <system:String x:Key="Text.CardSizeSmall">Small</system:String>
+    <system:String x:Key="Text.CardSizeLarge">Large</system:String>
     <system:String x:Key="Text.SoundNone">None</system:String>
     <system:String x:Key="Text.SoundKoron">Koron</system:String>
     <system:String x:Key="Text.SoundKirari">Kirari</system:String>
