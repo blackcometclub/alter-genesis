@@ -52,10 +52,11 @@ public partial class AddIcalCalendarWindow : Window
         try { _ = IcalFeedClient.ValidateSecretUrl(secretUrl); }
         catch (ArgumentException)
         {
-            ShowError("Text.CalendarUrlInvalid");
+            ShowUrlError("Text.CalendarUrlInvalid");
             return;
         }
 
+        UrlErrorText.Visibility = Visibility.Collapsed;
         ConnectButton.IsEnabled = false;
         ConnectButton.Content = FindResource("Text.Connecting");
         try
@@ -71,7 +72,7 @@ public partial class AddIcalCalendarWindow : Window
         }
         catch (IcalFeedException exception)
         {
-            ShowError(exception.Error switch
+            ShowUrlError(exception.Error switch
             {
                 IcalFeedError.InvalidUrl => "Text.CalendarUrlInvalid",
                 IcalFeedError.AccessDenied => "Text.CalendarAccessDenied",
@@ -94,8 +95,7 @@ public partial class AddIcalCalendarWindow : Window
         var name = CalendarNameBox.Text.Trim();
         if (name.Length == 0)
         {
-            ShowError("Text.CalendarNameRequired");
-            CalendarNameBox.Focus();
+            ShowDetailsError("Text.CalendarNameRequired");
             return;
         }
         if (ColorChoice.SelectedItem is not ColorOption color) return;
@@ -106,6 +106,8 @@ public partial class AddIcalCalendarWindow : Window
     private void BackClick(object sender, RoutedEventArgs e)
     {
         _validatedUrl = null;
+        UrlErrorText.Visibility = Visibility.Collapsed;
+        DetailsErrorText.Visibility = Visibility.Collapsed;
         DetailsStep.Visibility = Visibility.Collapsed;
         UrlStep.Visibility = Visibility.Visible;
         SecretUrlBox.Focus();
@@ -113,8 +115,25 @@ public partial class AddIcalCalendarWindow : Window
 
     private void CancelClick(object sender, RoutedEventArgs e) => DialogResult = false;
 
-    private void ShowError(string key) => MessageBox.Show(this, (string)FindResource(key),
-        (string)FindResource("Text.AddCalendarTitle"), MessageBoxButton.OK, MessageBoxImage.None);
+    private void SecretUrlChanged(object sender, RoutedEventArgs e) =>
+        UrlErrorText.Visibility = Visibility.Collapsed;
+
+    private void CalendarNameChanged(object sender, RoutedEventArgs e) =>
+        DetailsErrorText.Visibility = Visibility.Collapsed;
+
+    private void ShowUrlError(string key)
+    {
+        UrlErrorText.Text = (string)FindResource(key);
+        UrlErrorText.Visibility = Visibility.Visible;
+        SecretUrlBox.Focus();
+    }
+
+    private void ShowDetailsError(string key)
+    {
+        DetailsErrorText.Text = (string)FindResource(key);
+        DetailsErrorText.Visibility = Visibility.Visible;
+        CalendarNameBox.Focus();
+    }
 
     internal void ShowDetailsForLayout()
     {

@@ -15,17 +15,23 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="8" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="24" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <TextBlock Text="{DynamicResource Text.IcalUrl}" FontSize="14" />
             <PasswordBox Grid.Row="2" x:Name="SecretUrlBox"
                          Style="{StaticResource Style.CompactPasswordBox}"
+                         PasswordChanged="SecretUrlChanged"
                          AutomationProperties.AutomationId="IcalUrl"
                          AutomationProperties.Name="{DynamicResource Text.IcalUrl}" />
-            <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <TextBlock Grid.Row="3" x:Name="UrlErrorText" Margin="0,8,0,0"
+                       FontSize="12" Foreground="{DynamicResource Brush.TextSecondary}"
+                       TextWrapping="Wrap" Visibility="Collapsed"
+                       AutomationProperties.LiveSetting="Assertive" />
+            <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="CancelButton" Content="{DynamicResource Text.Cancel}" Click="CancelClick"
-                        Style="{StaticResource Style.SecondaryButton}" />
+                        Style="{StaticResource Style.SecondaryButton}" IsCancel="True" />
                 <Button x:Name="ConnectButton" Margin="8,0,0,0"
                         Content="{DynamicResource Text.Connect}" Click="ConnectClick"
                         Style="{StaticResource Style.CloseButton}"
@@ -38,6 +44,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="8" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="24" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="8" />
@@ -48,11 +55,16 @@
             <TextBlock Text="{DynamicResource Text.CalendarName}" FontSize="14" />
             <TextBox Grid.Row="2" x:Name="CalendarNameBox"
                      Style="{StaticResource Style.CompactTextBox}"
+                     TextChanged="CalendarNameChanged"
                      MaxLength="200"
                      AutomationProperties.AutomationId="CalendarName"
                      AutomationProperties.Name="{DynamicResource Text.CalendarName}" />
-            <TextBlock Grid.Row="4" Text="{DynamicResource Text.CalendarColor}" FontSize="14" />
-            <ListBox Grid.Row="6" x:Name="ColorChoice" Height="32"
+            <TextBlock Grid.Row="3" x:Name="DetailsErrorText" Margin="0,8,0,0"
+                       FontSize="12" Foreground="{DynamicResource Brush.TextSecondary}"
+                       TextWrapping="Wrap" Visibility="Collapsed"
+                       AutomationProperties.LiveSetting="Assertive" />
+            <TextBlock Grid.Row="5" Text="{DynamicResource Text.CalendarColor}" FontSize="14" />
+            <ListBox Grid.Row="7" x:Name="ColorChoice" Height="32"
                      ItemsSource="{Binding ColorOptions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
                      SelectionMode="Single" SelectedIndex="0"
                      Background="Transparent" BorderThickness="0" Padding="0"
@@ -97,7 +109,7 @@
                     </Style>
                 </ListBox.ItemContainerStyle>
             </ListBox>
-            <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right">
+            <StackPanel Grid.Row="9" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="BackButton" Content="{DynamicResource Text.Back}" Click="BackClick"
                         Style="{StaticResource Style.SecondaryButton}" />
                 <Button x:Name="SaveButton" Margin="8,0,0,0" Content="{DynamicResource Text.AddCalendar}" Click="AddClick"
