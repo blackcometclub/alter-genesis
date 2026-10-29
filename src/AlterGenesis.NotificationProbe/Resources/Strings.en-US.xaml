@@ -24,7 +24,11 @@
     <system:String x:Key="Text.TestNotification">Test notification</system:String>
     <system:String x:Key="Text.GoogleCalendars">Google Calendar</system:String>
     <system:String x:Key="Text.AddCalendar">Add</system:String>
-    <system:String x:Key="Text.UpdateCalendar">Refresh</system:String>
+    <system:String x:Key="Text.RefreshCalendarEvents">Refresh from iCal</system:String>
+    <system:String x:Key="Text.CalendarEventsRefreshing">Refreshing…</system:String>
+    <system:String x:Key="Text.CalendarEventsRefreshSucceeded">Events refreshed</system:String>
+    <system:String x:Key="Text.CalendarEventsRefreshFailed">Could not refresh</system:String>
+    <system:String x:Key="Text.UpdateCalendar">Check connection</system:String>
     <system:String x:Key="Text.RemoveCalendar">Remove</system:String>
     <system:String x:Key="Text.AddCalendarTitle">Add Google Calendar</system:String>
     <system:String x:Key="Text.IcalUrl">iCal URL</system:String>

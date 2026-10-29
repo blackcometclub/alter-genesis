@@ -24,7 +24,11 @@
     <system:String x:Key="Text.TestNotification">通知を試す</system:String>
     <system:String x:Key="Text.GoogleCalendars">Googleカレンダー</system:String>
     <system:String x:Key="Text.AddCalendar">追加</system:String>
-    <system:String x:Key="Text.UpdateCalendar">更新</system:String>
+    <system:String x:Key="Text.RefreshCalendarEvents">iCalから再取得</system:String>
+    <system:String x:Key="Text.CalendarEventsRefreshing">取得中…</system:String>
+    <system:String x:Key="Text.CalendarEventsRefreshSucceeded">取得しました</system:String>
+    <system:String x:Key="Text.CalendarEventsRefreshFailed">取得できませんでした</system:String>
+    <system:String x:Key="Text.UpdateCalendar">接続確認</system:String>
     <system:String x:Key="Text.RemoveCalendar">削除</system:String>
     <system:String x:Key="Text.AddCalendarTitle">Googleカレンダーを追加</system:String>
     <system:String x:Key="Text.IcalUrl">iCal URL</system:String>

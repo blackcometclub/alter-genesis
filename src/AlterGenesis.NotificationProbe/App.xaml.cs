@@ -157,8 +157,8 @@ public partial class App : Application
         if (_calendarSyncing) await SynchronizeCalendarsOnceAsync(calendars);
     }
 
-    private async Task SynchronizeCalendarsOnceAsync(
-        IReadOnlyCollection<IcalCalendarSubscription> calendars)
+    private async Task<bool> SynchronizeCalendarsOnceAsync(
+        IReadOnlyCollection<IcalCalendarSubscription> calendars, bool showErrors = true)
     {
         var nowUtc = DateTimeOffset.UtcNow;
         var throughUtc = nowUtc.AddDays(30);
@@ -207,19 +207,29 @@ public partial class App : Application
         }
         catch (OperationCanceledException) when (_calendarSyncCancellation.IsCancellationRequested)
         {
-            return;
+            return false;
         }
         finally
         {
             _calendarSyncing = false;
         }
 
-        if (_exiting) return;
-        if (readFailed) ShowNotificationError("Text.CalendarSyncFailed");
-        if (saveFailed) ShowNotificationError("Text.NotificationsSaveFailed");
-        if (!_schedule!.TryReleaseDue(out var presented))
-            ShowNotificationError("Text.ReminderSaveFailed");
+        if (_exiting) return false;
+        if (showErrors && readFailed) ShowNotificationError("Text.CalendarSyncFailed");
+        if (showErrors && saveFailed) ShowNotificationError("Text.NotificationsSaveFailed");
+        var released = _schedule!.TryReleaseDue(out var presented);
+        if (showErrors && !released) ShowNotificationError("Text.ReminderSaveFailed");
         SynchronizeNotifications(presented);
+        return !readFailed && !saveFailed && released;
+    }
+
+    private Task<bool> RefreshCalendarEventsAsync(
+        IReadOnlyCollection<IcalCalendarSubscription> calendars)
+    {
+        if (_calendarSyncing || _exiting || _schedule is null || calendars.Count == 0)
+            return Task.FromResult(false);
+        _calendarSyncing = true;
+        return SynchronizeCalendarsOnceAsync(calendars, showErrors: false);
     }
 
     private void AddTestNotifications()
@@ -347,7 +357,7 @@ public partial class App : Application
             return;
         }
         var window = new SettingsWindow(_store, _player!, _settings, AddTestNotifications,
-            _calendarStore, _icalClient);
+            _calendarStore, _icalClient, RefreshCalendarEventsAsync);
         _settingsWindow = window;
         window.SettingsChanged += (_, _) =>
         {

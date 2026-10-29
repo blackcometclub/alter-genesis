@@ -21,21 +21,27 @@ public partial class SettingsWindow : Window
     private readonly Action _showNotification;
     private readonly IcalCalendarStore _calendarStore;
     private readonly IcalFeedClient _icalClient;
+    private readonly Func<IReadOnlyCollection<IcalCalendarSubscription>, Task<bool>> _refreshCalendarEvents;
     private bool _ready;
     private bool _calendarLoadErrorShown;
+    private bool _refreshingCalendarEvents;
 
     public SettingsWindow(AppSettingsStore store, INotificationSoundPlayer player,
         AppSettings selectedSettings, Action showNotification,
-        IcalCalendarStore calendarStore, IcalFeedClient icalClient)
+        IcalCalendarStore calendarStore, IcalFeedClient icalClient,
+        Func<IReadOnlyCollection<IcalCalendarSubscription>, Task<bool>> refreshCalendarEvents)
     {
         _store = store;
         _player = player;
         _showNotification = showNotification;
         _calendarStore = calendarStore;
         _icalClient = icalClient;
+        _refreshCalendarEvents = refreshCalendarEvents;
         SelectedSettings = selectedSettings;
         CalendarSubscriptions = new ObservableCollection<IcalCalendarSubscription>(_calendarStore.Load());
         InitializeComponent();
+        CalendarSubscriptions.CollectionChanged += (_, _) => UpdateCalendarRefreshAvailability();
+        UpdateCalendarRefreshAvailability();
         RestoreSelection();
         SourceInitialized += (_, _) => DwmWindow.Apply(new WindowInteropHelper(this).Handle);
         Loaded += (_, _) =>
@@ -125,6 +131,37 @@ public partial class SettingsWindow : Window
         CalendarSubscriptions.Add(calendar);
     }
 
+    private async void RefreshCalendarEventsClick(object sender, RoutedEventArgs e)
+    {
+        if (_refreshingCalendarEvents || CalendarSubscriptions.Count == 0) return;
+        _refreshingCalendarEvents = true;
+        CalendarRefreshStatus.Text = (string)FindResource("Text.CalendarEventsRefreshing");
+        UpdateCalendarRefreshAvailability();
+        try
+        {
+            var succeeded = await _refreshCalendarEvents(CalendarSubscriptions.ToArray());
+            CalendarRefreshStatus.Text = (string)FindResource(succeeded
+                ? "Text.CalendarEventsRefreshSucceeded"
+                : "Text.CalendarEventsRefreshFailed");
+        }
+        catch (Exception)
+        {
+            CalendarRefreshStatus.Text = (string)FindResource("Text.CalendarEventsRefreshFailed");
+        }
+        finally
+        {
+            _refreshingCalendarEvents = false;
+            UpdateCalendarRefreshAvailability();
+            RefreshCalendarEventsButton.Focus();
+        }
+    }
+
+    private void UpdateCalendarRefreshAvailability()
+    {
+        RefreshCalendarEventsButton.IsEnabled = !_refreshingCalendarEvents
+            && !_calendarStore.LoadFailed && CalendarSubscriptions.Count > 0;
+    }
+
     private async void RefreshCalendarClick(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.CommandParameter is not IcalCalendarSubscription calendar) return;
@@ -172,12 +209,16 @@ public partial class SettingsWindow : Window
         var preview = PreviewButton.TranslatePoint(new Point(), this);
         var test = TestNotificationButton.TranslatePoint(new Point(), this);
         var add = AddCalendarButton.TranslatePoint(new Point(), this);
+        var refreshEvents = RefreshCalendarEventsButton.TranslatePoint(new Point(), this);
         var sizeChoice = CardSizeChoice.TranslatePoint(new Point(), this);
         var expectedHeight = (double)FindResource("Dimension.ControlHeight");
         var topDifference = Math.Abs(choice.Y - preview.Y);
         var bottomDifference = Math.Abs(choice.Y + SoundChoice.ActualHeight - preview.Y - PreviewButton.ActualHeight);
         var rightDifference = Math.Abs(preview.X + PreviewButton.ActualWidth - test.X - TestNotificationButton.ActualWidth);
         var calendarRightDifference = Math.Abs(add.X + AddCalendarButton.ActualWidth - test.X - TestNotificationButton.ActualWidth);
+        var calendarButtonTopDifference = Math.Abs(add.Y - refreshEvents.Y);
+        var calendarButtonBottomDifference = Math.Abs(add.Y + AddCalendarButton.ActualHeight
+            - refreshEvents.Y - RefreshCalendarEventsButton.ActualHeight);
         var choiceLeftDifference = Math.Abs(sizeChoice.X - choice.X);
         var choiceWidthDifference = Math.Abs(CardSizeChoice.ActualWidth - SoundChoice.ActualWidth);
         var rowButtons = FindVisualChildren<Button>(CalendarList)
@@ -199,8 +240,10 @@ public partial class SettingsWindow : Window
             && Math.Abs(PreviewButton.ActualHeight - expectedHeight) <= 1
             && Math.Abs(TestNotificationButton.ActualHeight - expectedHeight) <= 1
             && Math.Abs(AddCalendarButton.ActualHeight - expectedHeight) <= 1
+            && Math.Abs(RefreshCalendarEventsButton.ActualHeight - expectedHeight) <= 1
             && Math.Abs(CardSizeChoice.ActualHeight - expectedHeight) <= 1
             && choiceLeftDifference <= 1 && choiceWidthDifference <= 1 && calendarRightDifference <= 1
+            && calendarButtonTopDifference <= 1 && calendarButtonBottomDifference <= 1
             && calendarRowTopDifference <= 1 && calendarRowBottomDifference <= 1 && calendarRowHeightDifference <= 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllText(path, JsonSerializer.Serialize(new
@@ -211,6 +254,8 @@ public partial class SettingsWindow : Window
             ControlHeight = expectedHeight, TopDifference = topDifference,
             BottomDifference = bottomDifference, RightDifference = rightDifference,
             CalendarRightDifference = calendarRightDifference,
+            CalendarButtonTopDifference = calendarButtonTopDifference,
+            CalendarButtonBottomDifference = calendarButtonBottomDifference,
             CalendarCount = CalendarSubscriptions.Count,
             CalendarRowTopDifference = calendarRowTopDifference,
             CalendarRowBottomDifference = calendarRowBottomDifference,
