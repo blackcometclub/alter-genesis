@@ -21,6 +21,8 @@ Googleカレンダーの予定を、ユーザーが自分で閉じるまで残�
 
 詳しい判断は [設計検討メモ.md](./設計検討メモ.md) と [手動操作順.md](./手動操作順.md) を参照。
 
+Googleで設定した個別の通知時間を読むため、通常版と独立した[OAuth通知時刻の読み取り実験](./experiments/AlterGenesis.GoogleReminderProbe/README.md)を追加した。この実験はJSONの選択を不要にし、通知設定の取得と時刻計算だけを行う。通常版のiCal接続や通知動作は変更していない。
+
 ## WPFプローブの起動
 
 Windowsと.NET SDK 8以降、.NET 8 Desktop Runtimeを使用する。プロジェクトのルートで実行する。
