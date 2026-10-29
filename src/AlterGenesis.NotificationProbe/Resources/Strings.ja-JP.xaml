@@ -43,6 +43,9 @@
     <system:String x:Key="Text.CalendarSaveFailed">カレンダー設定を保存できませんでした。変更は反映していません。</system:String>
     <system:String x:Key="Text.CalendarAlreadyAdded">このカレンダーはすでに追加されています。</system:String>
     <system:String x:Key="Text.CalendarRefreshSucceeded">カレンダーへ接続できました。</system:String>
+    <system:String x:Key="Text.CalendarSyncFailed">カレンダーを更新できませんでした。</system:String>
+    <system:String x:Key="Text.AllDay">終日</system:String>
+    <system:String x:Key="Text.UntitledEvent">（無題）</system:String>
     <system:String x:Key="Text.CalendarRemoveConfirm">「{0}」を削除しますか？</system:String>
     <system:String x:Key="Text.CalendarNameRequired">名前を入力してください。</system:String>
     <system:String x:Key="Text.CalendarColorBlue">青灰</system:String>

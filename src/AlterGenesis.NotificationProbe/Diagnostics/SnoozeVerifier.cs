@@ -136,7 +136,8 @@ internal static class SnoozeVerifier
         string Encode(params SavedNotification[] items) => JsonSerializer.Serialize(new { Version = 1, Items = items }, options);
         var invalidData = new[] { "{broken", "null", "{\"Version\":2,\"Items\":[]}", "{\"Version\":1,\"Items\":null}",
             Encode(valid, valid), Encode(valid with { Status = NotificationStatus.Snoozed }),
-            Encode(valid with { DueAtUtc = baseline }), Encode(valid with { EventUrl = "file:///test.exe" }) };
+            Encode(valid with { DueAtUtc = baseline }), Encode(valid with { EventUrl = "file:///test.exe" }),
+            Encode(valid with { Status = NotificationStatus.Scheduled, DueAtUtc = baseline, SourceId = null }) };
         for (var index = 0; index < invalidData.Length; index++)
         {
             var caseIndex = index;

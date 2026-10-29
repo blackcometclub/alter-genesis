@@ -78,7 +78,9 @@ internal sealed class NotificationStore(string directory) : INotificationStore
             && item.CalendarColor is not null && Regex.IsMatch(item.CalendarColor, "^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
             && Uri.TryCreate(item.EventUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
             && (item.Status == NotificationStatus.Visible && item.DueAtUtc is null
-                || item.Status == NotificationStatus.Snoozed && item.DueAtUtc is not null));
+                || item.Status == NotificationStatus.Snoozed && item.DueAtUtc is not null
+                || item.Status == NotificationStatus.Scheduled && item.DueAtUtc is not null
+                    && !string.IsNullOrWhiteSpace(item.SourceId)));
 
     private sealed record NotificationData(int Version, IReadOnlyList<SavedNotification> Items);
 }

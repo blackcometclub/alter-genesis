@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using AlterGenesis.NotificationProbe.Calendars;
+using AlterGenesis.NotificationProbe.Notifications;
 
 namespace AlterGenesis.NotificationProbe.Diagnostics;
 
@@ -57,6 +58,64 @@ internal static class IcalVerifier
             Check("events parsed", preview.EventCount == 2);
         }
 
+        const string occurrenceIcs = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ALTER GENESIS Test//EN\r\n"
+            + "X-WR-CALNAME:Schedule Fixture\r\n"
+            + "BEGIN:VEVENT\r\nUID:single\r\nDTSTART:20261029T120000Z\r\nSUMMARY:Single\r\nEND:VEVENT\r\n"
+            + "BEGIN:VEVENT\r\nUID:daily\r\nDTSTART:20261029T130000Z\r\nRRULE:FREQ=DAILY;COUNT=3\r\nSUMMARY:Daily\r\nEND:VEVENT\r\n"
+            + "BEGIN:VEVENT\r\nUID:all-day\r\nDTSTART;VALUE=DATE:20261030\r\nSUMMARY:All Day\r\nEND:VEVENT\r\n"
+            + "BEGIN:VEVENT\r\nUID:cancelled\r\nDTSTART:20261030T140000Z\r\nSTATUS:CANCELLED\r\nSUMMARY:Cancelled\r\nEND:VEVENT\r\n"
+            + "END:VCALENDAR\r\n";
+        var testZone = TimeZoneInfo.CreateCustomTimeZone("ALTER-GENESIS-ICAL-TEST",
+            TimeSpan.FromHours(9), "ALTER-GENESIS-ICAL-TEST", "ALTER-GENESIS-ICAL-TEST");
+        var baseline = new DateTimeOffset(2026, 10, 29, 0, 0, 0, TimeSpan.Zero);
+        var through = baseline.AddDays(5);
+        using (var client = new IcalFeedClient(new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+               { Content = new StringContent(occurrenceIcs, Encoding.UTF8, "text/calendar") })))
+        {
+            var snapshot = await client.ReadEventsAsync(fakeUrl, baseline, through, testZone);
+            Check("recurrences expanded and cancelled events ignored", snapshot.Occurrences.Count == 5
+                && snapshot.Occurrences.Count(item => item.EventUid == "daily") == 3
+                && snapshot.Occurrences.All(item => item.EventUid != "cancelled"));
+            var allDay = snapshot.Occurrences.Single(item => item.EventUid == "all-day");
+            Check("all-day date preserved", allDay.IsAllDay
+                && allDay.AllDayDate == new DateOnly(2026, 10, 30));
+
+            var scheduled = CalendarNotificationFactory.Create(subscription, snapshot,
+                baseline, through, testZone, "終日", "（無題）");
+            var repeated = CalendarNotificationFactory.Create(subscription, snapshot,
+                baseline, through, testZone, "終日", "（無題）");
+            Check("stable occurrence ids prevent duplicates", scheduled.Count == 5
+                && scheduled.Select(item => item.Item.Id).SequenceEqual(repeated.Select(item => item.Item.Id))
+                && scheduled.Select(item => item.Item.Id).Distinct(StringComparer.Ordinal).Count() == 5);
+            var allDayNotification = scheduled.Single(item => item.Item.Title == "All Day");
+            Check("all-day notification waits until 09:00 local", allDayNotification.Item.StartTime == "終日"
+                && allDayNotification.DueAtUtc == new DateTimeOffset(2026, 10, 30, 0, 0, 0, TimeSpan.Zero));
+
+            var memory = new MemoryStore();
+            var now = baseline;
+            var schedule = new NotificationSchedule(memory, [], () => now);
+            Check("calendar schedule is replaced without duplicates", schedule.TryReplaceCalendarSchedule(
+                    subscription.Id, scheduled)
+                && schedule.TryReplaceCalendarSchedule(subscription.Id, scheduled)
+                && schedule.Items.Count == scheduled.Count && schedule.HasPending);
+            Check("removed future events leave the schedule", schedule.TryReplaceCalendarSchedule(
+                    subscription.Id, scheduled.Take(2).ToArray())
+                && schedule.Items.Count == 2);
+            Check("due calendar events become visible once", schedule.TryReplaceCalendarSchedule(
+                    subscription.Id, scheduled)
+                && schedule.TryReleaseDue(out var early) && early.Count == 0);
+            now = scheduled.Min(item => item.DueAtUtc);
+            Check("due calendar event is released", schedule.TryReleaseDue(out var due)
+                && due.Count == scheduled.Count(item => item.DueAtUtc <= now)
+                && schedule.TryReleaseDue(out var repeatedDue) && repeatedDue.Count == 0);
+
+            var scheduledStore = new NotificationStore(Path.Combine(root, "scheduled-roundtrip"));
+            Check("scheduled source survives restart", scheduledStore.TrySave(schedule.Items)
+                && new NotificationStore(Path.Combine(root, "scheduled-roundtrip")).Load()
+                    .Any(item => item.Status == NotificationStatus.Scheduled
+                        && item.SourceId == subscription.Id));
+        }
+
         using (var client = new IcalFeedClient(new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden))))
         {
             Check("access denied classified", await HasError(client, fakeUrl, IcalFeedError.AccessDenied));
@@ -95,5 +154,10 @@ internal static class IcalVerifier
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(response(request));
+    }
+
+    private sealed class MemoryStore : INotificationStore
+    {
+        public bool TrySave(IReadOnlyList<SavedNotification> items) => true;
     }
 }

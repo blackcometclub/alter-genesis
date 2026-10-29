@@ -43,6 +43,9 @@
     <system:String x:Key="Text.CalendarSaveFailed">Calendar settings could not be saved. The change was not applied.</system:String>
     <system:String x:Key="Text.CalendarAlreadyAdded">This calendar has already been added.</system:String>
     <system:String x:Key="Text.CalendarRefreshSucceeded">The calendar is connected.</system:String>
+    <system:String x:Key="Text.CalendarSyncFailed">The calendar could not be refreshed.</system:String>
+    <system:String x:Key="Text.AllDay">All day</system:String>
+    <system:String x:Key="Text.UntitledEvent">(Untitled)</system:String>
     <system:String x:Key="Text.CalendarRemoveConfirm">Remove “{0}”?</system:String>
     <system:String x:Key="Text.CalendarNameRequired">Enter a name.</system:String>
     <system:String x:Key="Text.CalendarColorBlue">Blue gray</system:String>

@@ -28,6 +28,8 @@ public partial class App : Application
     private NotificationSchedule? _schedule;
     private DispatcherTimer? _reminderTimer;
     private TrayIcon? _tray;
+    private readonly CancellationTokenSource _calendarSyncCancellation = new();
+    private bool _calendarSyncing;
     private bool _exiting;
     private bool _dueFailureShown;
     private string? _runtimeReport;
@@ -137,7 +139,12 @@ public partial class App : Application
         _reminderTimer.Tick += (_, _) => ReleaseDueNotifications();
 
         var openSettings = e.Args.Contains("--settings", StringComparer.OrdinalIgnoreCase);
-        if (!notificationStore.HasFile && !openSettings
+        var calendars = _calendarStore.Load();
+        if (_calendarStore.LoadFailed && !openSettings)
+            ShowNotificationError("Text.CalendarStoreUnreadable");
+        _calendarSyncing = !openSettings && !_calendarStore.LoadFailed && calendars.Count > 0;
+        if (!notificationStore.HasFile && !openSettings && !_calendarStore.LoadFailed
+            && calendars.Count == 0
             && !_schedule.TryAdd(SampleNotifications.Create(_args)))
             ShowNotificationError("Text.NotificationsSaveFailed");
         if (!_schedule.TryReleaseDue(out _))
@@ -145,8 +152,74 @@ public partial class App : Application
             _dueFailureShown = true;
             ShowNotificationError("Text.ReminderSaveFailed");
         }
-        if (openSettings || _schedule.Items.Count == 0) ShowSettings();
+        if (openSettings || _schedule.Items.Count == 0 && !_calendarSyncing) ShowSettings();
         SynchronizeNotifications(_schedule.Visible);
+        if (_calendarSyncing) await SynchronizeCalendarsOnceAsync(calendars);
+    }
+
+    private async Task SynchronizeCalendarsOnceAsync(
+        IReadOnlyCollection<IcalCalendarSubscription> calendars)
+    {
+        var nowUtc = DateTimeOffset.UtcNow;
+        var throughUtc = nowUtc.AddDays(30);
+        var localTimeZone = TimeZoneInfo.Local;
+        var readFailed = false;
+        var saveFailed = false;
+        try
+        {
+            var reads = await Task.WhenAll(calendars.Select(async calendar =>
+            {
+                try
+                {
+                    var snapshot = await _icalClient.ReadEventsAsync(calendar.SecretUrl,
+                        nowUtc, throughUtc, localTimeZone, _calendarSyncCancellation.Token);
+                    return new CalendarReadResult(calendar, snapshot, true);
+                }
+                catch (IcalFeedException)
+                {
+                    return new CalendarReadResult(calendar, null, false);
+                }
+                catch (OperationCanceledException) when (_calendarSyncCancellation.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception)
+                {
+                    return new CalendarReadResult(calendar, null, false);
+                }
+            }));
+
+            foreach (var read in reads)
+            {
+                if (!read.Succeeded || read.Snapshot is null)
+                {
+                    readFailed = true;
+                    continue;
+                }
+                var scheduled = CalendarNotificationFactory.Create(read.Calendar, read.Snapshot,
+                    nowUtc, throughUtc, localTimeZone,
+                    (string)FindResource("Text.AllDay"), (string)FindResource("Text.UntitledEvent"));
+                if (!_schedule!.TryReplaceCalendarSchedule(read.Calendar.Id, scheduled))
+                {
+                    saveFailed = true;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_calendarSyncCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+        finally
+        {
+            _calendarSyncing = false;
+        }
+
+        if (_exiting) return;
+        if (readFailed) ShowNotificationError("Text.CalendarSyncFailed");
+        if (saveFailed) ShowNotificationError("Text.NotificationsSaveFailed");
+        if (!_schedule!.TryReleaseDue(out var presented))
+            ShowNotificationError("Text.ReminderSaveFailed");
+        SynchronizeNotifications(presented);
     }
 
     private void AddTestNotifications()
@@ -241,7 +314,8 @@ public partial class App : Application
             File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(new
             {
                 Passed = layout.Passed, VisibleIds = _schedule!.Visible.Select(item => item.Id).ToArray(),
-                PendingCount = _schedule.Items.Count(item => item.Status == NotificationStatus.Snoozed),
+                PendingCount = _schedule.Items.Count(item => item.Status is NotificationStatus.Snoozed
+                    or NotificationStatus.Scheduled),
                 Layout = layout,
             }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
             LayoutVerifier.WritePreview(window, path);
@@ -252,7 +326,7 @@ public partial class App : Application
     private void MaybeExit()
     {
         if (!_exiting && _schedule is not null && !_schedule.HasPending
-            && _notificationWindow is null && _settingsWindow is null) RequestExit();
+            && !_calendarSyncing && _notificationWindow is null && _settingsWindow is null) RequestExit();
     }
 
     private void RequestExit()
@@ -290,10 +364,12 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _exiting = true;
+        _calendarSyncCancellation.Cancel();
         _reminderTimer?.Stop();
         _tray?.Dispose();
         _player?.Dispose();
         _icalClient.Dispose();
+        _calendarSyncCancellation.Dispose();
         if (_instanceMutex is not null)
         {
             _instanceMutex.ReleaseMutex();
@@ -301,6 +377,9 @@ public partial class App : Application
         }
         base.OnExit(e);
     }
+
+    private sealed record CalendarReadResult(IcalCalendarSubscription Calendar,
+        IcalCalendarSnapshot? Snapshot, bool Succeeded);
 
     private void ConfigureLanguage(IReadOnlyCollection<string> args)
     {

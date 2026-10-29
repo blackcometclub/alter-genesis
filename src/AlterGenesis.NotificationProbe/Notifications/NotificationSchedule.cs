@@ -11,10 +11,24 @@ internal sealed class NotificationSchedule(INotificationStore store,
     internal IReadOnlyList<SavedNotification> Items => _items;
     internal IReadOnlyList<NotificationItem> Visible => _items
         .Where(item => item.Status == NotificationStatus.Visible).Select(item => item.ToItem()).ToArray();
-    internal bool HasPending => _items.Any(item => item.Status == NotificationStatus.Snoozed);
+    internal bool HasPending => _items.Any(item => item.Status is NotificationStatus.Snoozed
+        or NotificationStatus.Scheduled);
 
     internal bool TryAdd(IReadOnlyCollection<NotificationItem> items) =>
         Commit(_items.Concat(items.Select(SavedNotification.FromItem)).ToArray());
+
+    internal bool TryReplaceCalendarSchedule(string sourceId,
+        IReadOnlyCollection<ScheduledNotification> scheduled)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId)
+            || scheduled.Any(item => item.SourceId != sourceId)) return false;
+        var retained = _items.Where(item => item.Status != NotificationStatus.Scheduled
+            || item.SourceId != sourceId).ToArray();
+        var retainedIds = retained.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+        var additions = scheduled.Where(item => !retainedIds.Contains(item.Item.Id))
+            .Select(SavedNotification.FromScheduled);
+        return Commit(retained.Concat(additions).ToArray());
+    }
 
     internal bool TrySnooze(string id, int minutes)
     {
@@ -32,7 +46,8 @@ internal sealed class NotificationSchedule(INotificationStore store,
     internal bool TryReleaseDue(out IReadOnlyList<NotificationItem> presented)
     {
         var now = _clock().ToUniversalTime();
-        var due = _items.Where(item => item.Status == NotificationStatus.Snoozed && item.DueAtUtc <= now).ToArray();
+        var due = _items.Where(item => (item.Status is NotificationStatus.Snoozed
+                or NotificationStatus.Scheduled) && item.DueAtUtc <= now).ToArray();
         presented = [];
         if (due.Length == 0) return true;
         var ids = due.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
