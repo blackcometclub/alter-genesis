@@ -25,6 +25,8 @@ internal static class IcalVerifier
 
         var fakeUrl = "https://calendar.google.com/calendar/ical/example/private-fake/basic.ics";
         var subscription = IcalCalendarSubscription.Create("Sample Calendar", "#71859C", fakeUrl);
+        Check("accessible identity hides secret", subscription.ToString() == "Sample Calendar"
+            && !subscription.ToString().Contains("private-fake", StringComparison.Ordinal));
         var store = new IcalCalendarStore(Path.Combine(root, "roundtrip"));
         Check("encrypted save", store.TrySave([subscription]));
         var storedBytes = File.ReadAllBytes(store.FilePath);

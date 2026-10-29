@@ -18,6 +18,8 @@ public sealed record IcalCalendarSubscription(
         return new IcalCalendarSubscription(id, name.Trim(), colorHex.ToUpperInvariant(), normalizedUrl);
     }
 
+    public override string ToString() => Name;
+
     [JsonIgnore]
     public Brush ColorBrush
     {
