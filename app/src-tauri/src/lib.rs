@@ -1,4 +1,20 @@
+mod settings;
+
+use settings::{AppSettings, SettingsState};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+#[tauri::command]
+fn load_settings(state: tauri::State<'_, SettingsState>) -> Result<AppSettings, String> {
+    state.load()
+}
+
+#[tauri::command]
+fn save_settings(
+    state: tauri::State<'_, SettingsState>,
+    settings: AppSettings,
+) -> Result<AppSettings, String> {
+    state.save(settings)
+}
 
 #[tauri::command]
 fn open_test_panel(app: tauri::AppHandle) -> Result<(), String> {
@@ -30,7 +46,16 @@ fn open_test_panel(app: tauri::AppHandle) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![open_test_panel])
+        .setup(|app| {
+            let settings_path = app.path().app_local_data_dir()?.join("settings.json");
+            app.manage(SettingsState::new(settings_path));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            load_settings,
+            save_settings,
+            open_test_panel
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

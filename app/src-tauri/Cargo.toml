@@ -2,7 +2,7 @@
 name = "alter-genesis"
 version = "0.1.0"
 description = "Persistent Google Calendar notifications for Windows"
-authors = ["Jun and Tsuzu"]
+authors = ["TINMOON"]
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
