@@ -1,0 +1,47 @@
+<UserControl x:Class="AlterGenesis.NotificationProbe.GoogleConnectionPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Loaded="PanelLoaded" Unloaded="PanelUnloaded">
+    <StackPanel>
+        <TextBlock Text="{DynamicResource Text.GoogleCalendar}" FontSize="14" />
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button x:Name="ConnectButton" Content="{DynamicResource Text.GoogleConnect}"
+                    Style="{StaticResource Style.CloseButton}" Click="ConnectClick"
+                    AutomationProperties.AutomationId="GoogleConnect" />
+            <Button x:Name="RefreshButton" Content="{DynamicResource Text.GoogleRefresh}" Visibility="Collapsed"
+                    Style="{StaticResource Style.CloseButton}" Click="RefreshClick"
+                    AutomationProperties.AutomationId="GoogleRefresh" />
+            <Button x:Name="DisconnectButton" Margin="8,0,0,0" Content="{DynamicResource Text.GoogleDisconnect}" Visibility="Collapsed"
+                    Style="{StaticResource Style.CloseButton}" Click="DisconnectClick"
+                    AutomationProperties.AutomationId="GoogleDisconnect" />
+            <Button x:Name="CancelButton" Margin="8,0,0,0" Content="{DynamicResource Text.GoogleCancel}" Visibility="Collapsed"
+                    Style="{StaticResource Style.CloseButton}" Click="CancelClick" />
+        </StackPanel>
+        <ScrollViewer x:Name="CalendarScroller" Margin="0,12,0,0" MaxHeight="192" Visibility="Collapsed"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="CalendarChoices" AutomationProperties.AutomationId="GoogleCalendars">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" MinHeight="{StaticResource Dimension.ControlHeight}"
+                                  Style="{StaticResource Style.CalendarCheckBox}" Checked="CalendarSelectionChanged" Unchecked="CalendarSelectionChanged"
+                                  AutomationProperties.Name="{Binding Name}">
+                            <StackPanel Orientation="Horizontal">
+                                <Border Width="8" Height="16" Background="{Binding Color}" CornerRadius="2" Margin="0,0,8,0" />
+                                <TextBlock Text="{Binding Name}" MaxWidth="260" TextTrimming="CharacterEllipsis"
+                                           Loaded="CalendarNameLoaded" SizeChanged="CalendarNameSizeChanged"
+                                           ToolTipService.InitialShowDelay="350">
+                                    <TextBlock.ToolTip>
+                                        <ToolTip Content="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource Self}}"
+                                                 Style="{StaticResource Style.TitleToolTip}" />
+                                    </TextBlock.ToolTip>
+                                </TextBlock>
+                            </StackPanel>
+                        </CheckBox>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+        <TextBlock x:Name="StatusText" Visibility="Collapsed" Margin="0,12,0,0" TextWrapping="Wrap"
+                   Foreground="{DynamicResource Brush.TextSecondary}" FontSize="12" />
+    </StackPanel>
+</UserControl>

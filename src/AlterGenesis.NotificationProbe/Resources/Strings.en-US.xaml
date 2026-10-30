@@ -66,4 +66,18 @@
     <system:String x:Key="Text.NotificationsUnreadable">Notification data could not be read. The original file has not been changed.</system:String>
     <system:String x:Key="Text.NotificationsSaveFailed">The notification change could not be saved. The notification will remain visible.</system:String>
     <system:String x:Key="Text.ReminderSaveFailed">The reminder could not be saved. Its reservation will be kept and retried.</system:String>
+    <system:String x:Key="Text.GoogleAllDayDeferred">Refreshed. All-day reminders are not supported yet.</system:String>
+    <system:String x:Key="Text.GoogleAuthorizing">Sign in using your browser</system:String>
+    <system:String x:Key="Text.GoogleCalendar">Google Calendar</system:String>
+    <system:String x:Key="Text.GoogleCancel">Cancel</system:String>
+    <system:String x:Key="Text.GoogleCanceled">Stopped. Please try again.</system:String>
+    <system:String x:Key="Text.GoogleConfigurationInvalid">Could not read the connection settings or events.</system:String>
+    <system:String x:Key="Text.GoogleConnect">Sign in with Google</system:String>
+    <system:String x:Key="Text.GoogleConnectionFailed">Could not refresh. Check your connection and try again.</system:String>
+    <system:String x:Key="Text.GoogleCredentialsUnreadable">Cannot read the saved connection. The existing files have been kept.</system:String>
+    <system:String x:Key="Text.GoogleDisconnect">Disconnect</system:String>
+    <system:String x:Key="Text.GooglePermissionsRequired">Allow access to the calendar list and events.</system:String>
+    <system:String x:Key="Text.GoogleReconnect">Please sign in to Google again.</system:String>
+    <system:String x:Key="Text.GoogleRefresh">Refresh</system:String>
+    <system:String x:Key="Text.GoogleUnnamedCalendar">(Unnamed calendar)</system:String>
 </ResourceDictionary>

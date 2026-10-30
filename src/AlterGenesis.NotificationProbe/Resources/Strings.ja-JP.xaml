@@ -66,4 +66,18 @@
     <system:String x:Key="Text.NotificationsUnreadable">通知データを読み込めませんでした。元のファイルは変更していません。</system:String>
     <system:String x:Key="Text.NotificationsSaveFailed">通知の変更を保存できませんでした。通知はそのまま残します。</system:String>
     <system:String x:Key="Text.ReminderSaveFailed">再通知を保存できませんでした。予約を保ったまま、もう一度試します。</system:String>
+    <system:String x:Key="Text.GoogleAllDayDeferred">取得しました。終日予定の通知はまだ未対応です。</system:String>
+    <system:String x:Key="Text.GoogleAuthorizing">ブラウザーでログインしてください</system:String>
+    <system:String x:Key="Text.GoogleCalendar">Googleカレンダー</system:String>
+    <system:String x:Key="Text.GoogleCancel">キャンセル</system:String>
+    <system:String x:Key="Text.GoogleCanceled">中断しました。もう一度試してください。</system:String>
+    <system:String x:Key="Text.GoogleConfigurationInvalid">接続設定または予定を読み取れませんでした。</system:String>
+    <system:String x:Key="Text.GoogleConnect">Googleでログイン</system:String>
+    <system:String x:Key="Text.GoogleConnectionFailed">取得できませんでした。通信を確認して、更新してください。</system:String>
+    <system:String x:Key="Text.GoogleCredentialsUnreadable">接続情報を読み込めません。保存済みの情報は保護しています。</system:String>
+    <system:String x:Key="Text.GoogleDisconnect">切断</system:String>
+    <system:String x:Key="Text.GooglePermissionsRequired">カレンダー一覧と予定の読み取りを許可してください。</system:String>
+    <system:String x:Key="Text.GoogleReconnect">Googleへログインし直してください。</system:String>
+    <system:String x:Key="Text.GoogleRefresh">更新</system:String>
+    <system:String x:Key="Text.GoogleUnnamedCalendar">（名前のないカレンダー）</system:String>
 </ResourceDictionary>

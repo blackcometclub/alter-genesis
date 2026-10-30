@@ -39,6 +39,20 @@ internal sealed class NotificationSchedule(INotificationStore store,
             ? item with { Status = NotificationStatus.Snoozed, DueAtUtc = due } : item).ToArray());
     }
 
+    internal bool TryKeepCalendarSources(IReadOnlySet<string> sources) =>
+        Commit(_items.Where(item => item.SourceId is null || sources.Contains(item.SourceId)).ToArray());
+
+    internal bool TryReplaceCalendarSchedules(IReadOnlyCollection<ScheduledNotification> scheduled,
+        IReadOnlySet<string> selectedSources)
+    {
+        if (scheduled.Any(item => !selectedSources.Contains(item.SourceId))) return false;
+        var retained = _items.Where(item => item.SourceId is null
+            || selectedSources.Contains(item.SourceId) && item.Status != NotificationStatus.Scheduled).ToArray();
+        var ids = retained.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+        return Commit(retained.Concat(scheduled.Where(item => !ids.Contains(item.Item.Id))
+            .Select(SavedNotification.FromScheduled)).ToArray());
+    }
+
     internal bool TryDismiss(string id) =>
         _items.Any(item => item.Id == id && item.Status == NotificationStatus.Visible)
         && Commit(_items.Where(item => item.Id != id).ToArray());

@@ -11,6 +11,7 @@ using AlterGenesis.NotificationProbe.Settings;
 using AlterGenesis.NotificationProbe.Notifications;
 using AlterGenesis.NotificationProbe.Interop;
 using AlterGenesis.NotificationProbe.Calendars;
+using AlterGenesis.NotificationProbe.Google;
 
 namespace AlterGenesis.NotificationProbe;
 
@@ -33,6 +34,8 @@ public partial class App : Application
     private bool _exiting;
     private bool _dueFailureShown;
     private string? _runtimeReport;
+    private bool _useGoogle;
+    private GoogleNotificationSession? _googleSession;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -40,6 +43,13 @@ public partial class App : Application
 
         ConfigureLanguage(e.Args);
         _args = e.Args;
+        _useGoogle = !e.Args.Contains("--ical", StringComparer.OrdinalIgnoreCase);
+
+        if (ReadArgumentValue(e.Args, "--google-report") is { } googleReport)
+        {
+            Shutdown(await GoogleNotificationVerifier.RunAsync(googleReport) ? 0 : 1);
+            return;
+        }
 
         if (ReadArgumentValue(e.Args, "--snooze-report") is { } snoozeReport)
         {
@@ -91,6 +101,12 @@ public partial class App : Application
         var directory = ReadArgumentValue(e.Args, "--data-dir") ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "TINMOON", "AlterGenesis.NotificationProbe");
+        foreach (var option in new[] { "--settings-layout-report", "--runtime-report", "--google-state-report", "--google-settings-report" })
+            if (ReadArgumentValue(e.Args, option) is { } output && !DiagnosticOutputGuard.Allows(directory, output))
+            {
+                Shutdown(2);
+                return; // A diagnostic must never overwrite settings, notifications or credentials.
+            }
         _store = new AppSettingsStore(directory);
         _calendarStore = new IcalCalendarStore(directory);
         var identity = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar).ToUpperInvariant();
@@ -122,7 +138,7 @@ public partial class App : Application
             Shutdown(1);
             return;
         }
-        var notificationStore = new NotificationStore(directory);
+        var notificationStore = new NotificationStore(_useGoogle ? Path.Combine(directory, "google-notifications") : directory);
         var saved = notificationStore.Load();
         if (notificationStore.LoadFailed)
         {
@@ -137,6 +153,29 @@ public partial class App : Application
             () => Dispatcher.Invoke(ShowSettings), () => Dispatcher.Invoke(() => RequestExit()));
         _reminderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _reminderTimer.Tick += (_, _) => ReleaseDueNotifications();
+
+        if (_useGoogle)
+        {
+            _googleSession = new GoogleNotificationSession(new GoogleCalendarConnection(directory), _schedule,
+                SynchronizeNotifications, () => (string)FindResource("Text.UntitledEvent"));
+            if (ReadArgumentValue(e.Args, "--google-state-report") is { } stateReport
+                && ReadArgumentValue(e.Args, "--data-dir") is not null)
+                _googleSession.Changed += () => WriteGoogleStateReport(stateReport);
+            if (e.Args.Contains("--settings", StringComparer.OrdinalIgnoreCase)) ShowSettings();
+            await _googleSession.RestoreAsync();
+            if (_exiting) return;
+            // Restored visible cards are shown without duplicating their original presentation sound.
+            SynchronizeNotifications([]);
+            if (!_googleSession.Connected || _googleSession.StatusKey is "Text.GoogleConnectionFailed"
+                or "Text.GoogleConfigurationInvalid" or "Text.GoogleCredentialsUnreadable") ShowSettings();
+            if (ReadArgumentValue(e.Args, "--google-settings-report") is { } settingsReport
+                && ReadArgumentValue(e.Args, "--data-dir") is not null && _settingsWindow is { } settingsWindow)
+            {
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                settingsWindow.WriteLayoutReport(settingsReport);
+            }
+            return;
+        }
 
         var openSettings = e.Args.Contains("--settings", StringComparer.OrdinalIgnoreCase);
         var calendars = _calendarStore.Load();
@@ -155,6 +194,20 @@ public partial class App : Application
         if (openSettings || _schedule.Items.Count == 0 && !_calendarSyncing) ShowSettings();
         SynchronizeNotifications(_schedule.Visible);
         if (_calendarSyncing) await SynchronizeCalendarsOnceAsync(calendars);
+    }
+
+    private void WriteGoogleStateReport(string path)
+    {
+        if (_googleSession is null || _exiting) return;
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(new
+        {
+            AtUtc = DateTimeOffset.UtcNow, _googleSession.Busy, _googleSession.Connected,
+            _googleSession.StatusKey, _googleSession.FailureCode,
+            CalendarCount = _googleSession.Snapshot.Calendars.Length,
+            SelectedCount = _googleSession.Snapshot.SelectedIds.Length,
+            ScheduledCount = _schedule?.Items.Count(item => item.Status == NotificationStatus.Scheduled),
+        }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
 
     private async Task<bool> SynchronizeCalendarsOnceAsync(
@@ -257,7 +310,7 @@ public partial class App : Application
 
     private void ReleaseDueNotifications()
     {
-        if (_schedule is null || _exiting) return;
+        if (_schedule is null || _exiting || _googleSession is { Busy: true } or { ScheduleBlocked: true }) return;
         if (!_schedule.TryReleaseDue(out var presented))
         {
             if (!_dueFailureShown)
@@ -335,7 +388,7 @@ public partial class App : Application
 
     private void MaybeExit()
     {
-        if (!_exiting && _schedule is not null && !_schedule.HasPending
+        if (!_useGoogle && !_exiting && _schedule is not null && !_schedule.HasPending
             && !_calendarSyncing && _notificationWindow is null && _settingsWindow is null) RequestExit();
     }
 
@@ -357,7 +410,7 @@ public partial class App : Application
             return;
         }
         var window = new SettingsWindow(_store, _player!, _settings, AddTestNotifications,
-            _calendarStore, _icalClient, RefreshCalendarEventsAsync);
+            _calendarStore, _icalClient, RefreshCalendarEventsAsync, _useGoogle, _googleSession);
         _settingsWindow = window;
         window.SettingsChanged += (_, _) =>
         {
@@ -379,6 +432,7 @@ public partial class App : Application
         _tray?.Dispose();
         _player?.Dispose();
         _icalClient.Dispose();
+        _googleSession?.Dispose();
         _calendarSyncCancellation.Dispose();
         if (_instanceMutex is not null)
         {

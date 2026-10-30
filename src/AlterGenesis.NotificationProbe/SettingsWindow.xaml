@@ -4,6 +4,7 @@
         xmlns:effects="clr-namespace:AlterGenesis.NotificationProbe.Effects"
         xmlns:models="clr-namespace:AlterGenesis.NotificationProbe.Models"
         xmlns:calendars="clr-namespace:AlterGenesis.NotificationProbe.Calendars"
+        xmlns:local="clr-namespace:AlterGenesis.NotificationProbe"
         Title="{DynamicResource Text.SettingsTitle}"
         Width="408" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
@@ -61,7 +62,8 @@
                     Style="{StaticResource Style.CloseButton}"
                     AutomationProperties.AutomationId="PreviewSound" />
         </Grid>
-        <TextBlock Grid.Row="8" Text="{DynamicResource Text.GoogleCalendars}" FontSize="14" />
+        <local:GoogleConnectionPanel Grid.Row="8" Grid.RowSpan="5" x:Name="GooglePanel" Visibility="Collapsed" />
+        <TextBlock Grid.Row="8" x:Name="IcalHeading" Text="{DynamicResource Text.GoogleCalendars}" FontSize="14" />
         <ItemsControl Grid.Row="10" x:Name="CalendarList"
                       ItemsSource="{Binding CalendarSubscriptions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
             <ItemsControl.ItemTemplate>
@@ -89,7 +91,7 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <Grid Grid.Row="12">
+        <Grid Grid.Row="12" x:Name="IcalButtons">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="8" />

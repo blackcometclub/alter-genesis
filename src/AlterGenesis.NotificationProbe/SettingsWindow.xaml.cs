@@ -11,6 +11,7 @@ using AlterGenesis.NotificationProbe.Models;
 using AlterGenesis.NotificationProbe.Settings;
 using AlterGenesis.NotificationProbe.Diagnostics;
 using AlterGenesis.NotificationProbe.Calendars;
+using AlterGenesis.NotificationProbe.Google;
 
 namespace AlterGenesis.NotificationProbe;
 
@@ -25,11 +26,13 @@ public partial class SettingsWindow : Window
     private bool _ready;
     private bool _calendarLoadErrorShown;
     private bool _refreshingCalendarEvents;
+    private readonly bool _useGoogle;
 
-    public SettingsWindow(AppSettingsStore store, INotificationSoundPlayer player,
+    internal SettingsWindow(AppSettingsStore store, INotificationSoundPlayer player,
         AppSettings selectedSettings, Action showNotification,
         IcalCalendarStore calendarStore, IcalFeedClient icalClient,
-        Func<IReadOnlyCollection<IcalCalendarSubscription>, Task<bool>> refreshCalendarEvents)
+        Func<IReadOnlyCollection<IcalCalendarSubscription>, Task<bool>> refreshCalendarEvents,
+        bool useGoogle = false, GoogleNotificationSession? googleSession = null)
     {
         _store = store;
         _player = player;
@@ -38,8 +41,15 @@ public partial class SettingsWindow : Window
         _icalClient = icalClient;
         _refreshCalendarEvents = refreshCalendarEvents;
         SelectedSettings = selectedSettings;
-        CalendarSubscriptions = new ObservableCollection<IcalCalendarSubscription>(_calendarStore.Load());
+        _useGoogle = useGoogle;
+        CalendarSubscriptions = new ObservableCollection<IcalCalendarSubscription>(useGoogle ? [] : _calendarStore.Load());
         InitializeComponent();
+        if (useGoogle)
+        {
+            IcalHeading.Visibility = CalendarList.Visibility = IcalButtons.Visibility = Visibility.Collapsed;
+            GooglePanel.Visibility = Visibility.Visible;
+            GooglePanel.Initialize(googleSession);
+        }
         CalendarSubscriptions.CollectionChanged += (_, _) => UpdateCalendarRefreshAvailability();
         UpdateCalendarRefreshAvailability();
         RestoreSelection();
@@ -47,7 +57,7 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) =>
         {
             CardSizeChoice.Focus();
-            if (_calendarStore.LoadFailed && !_calendarLoadErrorShown)
+            if (!useGoogle && _calendarStore.LoadFailed && !_calendarLoadErrorShown)
             {
                 _calendarLoadErrorShown = true;
                 ShowError("Text.CalendarStoreUnreadable");
@@ -205,6 +215,7 @@ public partial class SettingsWindow : Window
 
     internal bool WriteLayoutReport(string path)
     {
+        if (_useGoogle) return WriteGoogleLayoutReport(path);
         var choice = SoundChoice.TranslatePoint(new Point(), this);
         var preview = PreviewButton.TranslatePoint(new Point(), this);
         var test = TestNotificationButton.TranslatePoint(new Point(), this);
@@ -262,6 +273,30 @@ public partial class SettingsWindow : Window
             CalendarRowHeightDifference = calendarRowHeightDifference,
             Width = ActualWidth, Height = ActualHeight,
         }, new JsonSerializerOptions { WriteIndented = true }));
+        LayoutVerifier.WritePreview(this, path);
+        return passed;
+    }
+
+    private bool WriteGoogleLayoutReport(string path)
+    {
+        var controls = new FrameworkElement[] { CardSizeChoice, SoundChoice, PreviewButton, TestNotificationButton }
+            .Concat(FindVisualChildren<Button>(GooglePanel).Where(button => button.IsVisible)).ToArray();
+        var expected = (double)FindResource("Dimension.ControlHeight");
+        var heightError = controls.Max(control => Math.Abs(control.ActualHeight - expected));
+        var sound = SoundChoice.TranslatePoint(new Point(), this);
+        var preview = PreviewButton.TranslatePoint(new Point(), this);
+        var google = GooglePanel.TranslatePoint(new Point(), this);
+        var size = CardSizeChoice.TranslatePoint(new Point(), this);
+        var row = FindVisualChildren<Button>(GooglePanel).Where(button => button.IsVisible).ToArray();
+        var rowYs = row.Select(control => control.TranslatePoint(new Point(), this).Y).ToArray();
+        var rowError = rowYs.Length == 0 ? 0 : rowYs.Max() - rowYs.Min();
+        var passed = heightError <= 1 && Math.Abs(sound.Y - preview.Y) <= 1
+            && Math.Abs(sound.X - size.X) <= 1 && Math.Abs(sound.X - google.X) <= 1
+            && Math.Abs(CardSizeChoice.ActualWidth - SoundChoice.ActualWidth) <= 1 && rowError <= 1;
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        File.WriteAllText(path, JsonSerializer.Serialize(new { Passed = passed, ControlHeight = expected,
+            HeightError = heightError, RowTopError = rowError, SoundRowTopError = Math.Abs(sound.Y - preview.Y),
+            Width = ActualWidth, Height = ActualHeight }, new JsonSerializerOptions { WriteIndented = true }));
         LayoutVerifier.WritePreview(this, path);
         return passed;
     }
