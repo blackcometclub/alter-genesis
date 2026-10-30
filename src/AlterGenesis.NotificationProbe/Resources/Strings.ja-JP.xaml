@@ -16,6 +16,8 @@
     <system:String x:Key="Text.LanguageSystem">システム</system:String>
     <system:String x:Key="Text.LanguageEnglish">English</system:String>
     <system:String x:Key="Text.LanguageJapanese">日本語</system:String>
+    <system:String x:Key="Text.StartWithWindows">Windowsと一緒に起動</system:String>
+    <system:String x:Key="Text.StartupRegistrationFailed">Windowsの起動設定を変更できませんでした。</system:String>
     <system:String x:Key="Text.NotificationSound">通知音</system:String>
     <system:String x:Key="Text.CardSize">カードの大きさ</system:String>
     <system:String x:Key="Text.CardSizeSmall">小さめ</system:String>

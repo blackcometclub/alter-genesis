@@ -356,4 +356,6 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <Style x:Key="Style.SettingsCheckBox" TargetType="CheckBox"
+           BasedOn="{StaticResource Style.CalendarCheckBox}" />
 </ResourceDictionary>

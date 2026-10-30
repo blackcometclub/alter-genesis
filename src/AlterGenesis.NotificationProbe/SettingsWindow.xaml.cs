@@ -12,6 +12,7 @@ using AlterGenesis.NotificationProbe.Settings;
 using AlterGenesis.NotificationProbe.Diagnostics;
 using AlterGenesis.NotificationProbe.Calendars;
 using AlterGenesis.NotificationProbe.Google;
+using AlterGenesis.NotificationProbe.Startup;
 
 namespace AlterGenesis.NotificationProbe;
 
@@ -28,11 +29,14 @@ public partial class SettingsWindow : Window
     private bool _refreshingCalendarEvents;
     private string? _calendarRefreshStatusKey;
     private readonly bool _useGoogle;
+    private readonly IStartupRegistration _startupRegistration;
+    private bool _startupEnabled;
 
     internal SettingsWindow(AppSettingsStore store, INotificationSoundPlayer player,
         AppSettings selectedSettings, Action showNotification,
         IcalCalendarStore calendarStore, IcalFeedClient icalClient,
         Func<IReadOnlyCollection<IcalCalendarSubscription>, Task<bool>> refreshCalendarEvents,
+        IStartupRegistration startupRegistration,
         bool useGoogle = false, GoogleNotificationSession? googleSession = null)
     {
         _store = store;
@@ -41,6 +45,7 @@ public partial class SettingsWindow : Window
         _calendarStore = calendarStore;
         _icalClient = icalClient;
         _refreshCalendarEvents = refreshCalendarEvents;
+        _startupRegistration = startupRegistration;
         SelectedSettings = selectedSettings;
         _useGoogle = useGoogle;
         CalendarSubscriptions = new ObservableCollection<IcalCalendarSubscription>(useGoogle ? [] : _calendarStore.Load());
@@ -53,6 +58,7 @@ public partial class SettingsWindow : Window
         }
         CalendarSubscriptions.CollectionChanged += (_, _) => UpdateCalendarRefreshAvailability();
         UpdateCalendarRefreshAvailability();
+        _startupRegistration.TryGetEnabled(out _startupEnabled);
         RestoreSelection();
         SourceInitialized += (_, _) => DwmWindow.Apply(new WindowInteropHelper(this).Handle);
         Loaded += (_, _) =>
@@ -70,6 +76,20 @@ public partial class SettingsWindow : Window
     public AppSettings SelectedSettings { get; private set; }
     public ObservableCollection<IcalCalendarSubscription> CalendarSubscriptions { get; }
     public event EventHandler? SettingsChanged;
+
+    private void StartupWithWindowsChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_ready) return;
+        var enabled = StartupWithWindowsCheckBox.IsChecked == true;
+        if (enabled == _startupEnabled) return;
+        if (!_startupRegistration.TrySetEnabled(enabled))
+        {
+            RestoreStartupSelection();
+            ShowError("Text.StartupRegistrationFailed");
+            return;
+        }
+        _startupEnabled = enabled;
+    }
 
     private void LanguageSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -122,7 +142,15 @@ public partial class SettingsWindow : Window
         SoundRepeatChoice.SelectedValue = SelectedSettings.SoundRepeat;
         CardSizeChoice.SelectedValue = SelectedSettings.CardSize;
         LanguageChoice.SelectedValue = SelectedSettings.Language;
+        StartupWithWindowsCheckBox.IsChecked = _startupEnabled;
         PreviewButton.IsEnabled = SelectedSettings.Sound != NotificationSound.None;
+        _ready = true;
+    }
+
+    private void RestoreStartupSelection()
+    {
+        _ready = false;
+        StartupWithWindowsCheckBox.IsChecked = _startupEnabled;
         _ready = true;
     }
 
@@ -253,6 +281,7 @@ public partial class SettingsWindow : Window
         var sizeChoice = CardSizeChoice.TranslatePoint(new Point(), this);
         var repeatChoice = SoundRepeatChoice.TranslatePoint(new Point(), this);
         var languageChoice = LanguageChoice.TranslatePoint(new Point(), this);
+        var startupChoice = StartupWithWindowsCheckBox.TranslatePoint(new Point(), this);
         var expectedHeight = (double)FindResource("Dimension.ControlHeight");
         var topDifference = Math.Abs(choice.Y - preview.Y);
         var bottomDifference = Math.Abs(choice.Y + SoundChoice.ActualHeight - preview.Y - PreviewButton.ActualHeight);
@@ -267,6 +296,8 @@ public partial class SettingsWindow : Window
         var repeatWidthDifference = Math.Abs(SoundRepeatChoice.ActualWidth - SoundChoice.ActualWidth);
         var languageLeftDifference = Math.Abs(languageChoice.X - choice.X);
         var languageWidthDifference = Math.Abs(LanguageChoice.ActualWidth - SoundChoice.ActualWidth);
+        var startupLeftDifference = Math.Abs(startupChoice.X - choice.X);
+        var startupWidthDifference = Math.Abs(StartupWithWindowsCheckBox.ActualWidth - SoundChoice.ActualWidth);
         var rowButtons = FindVisualChildren<Button>(CalendarList)
             .Where(button => button.CommandParameter is IcalCalendarSubscription).Take(2).ToArray();
         var calendarRowTopDifference = 0d;
@@ -290,9 +321,11 @@ public partial class SettingsWindow : Window
             && Math.Abs(CardSizeChoice.ActualHeight - expectedHeight) <= 1
             && Math.Abs(SoundRepeatChoice.ActualHeight - expectedHeight) <= 1
             && Math.Abs(LanguageChoice.ActualHeight - expectedHeight) <= 1
+            && Math.Abs(StartupWithWindowsCheckBox.ActualHeight - expectedHeight) <= 1
             && choiceLeftDifference <= 1 && choiceWidthDifference <= 1 && calendarRightDifference <= 1
             && repeatLeftDifference <= 1 && repeatWidthDifference <= 1
             && languageLeftDifference <= 1 && languageWidthDifference <= 1
+            && startupLeftDifference <= 1 && startupWidthDifference <= 1
             && calendarButtonTopDifference <= 1 && calendarButtonBottomDifference <= 1
             && calendarRowTopDifference <= 1 && calendarRowBottomDifference <= 1 && calendarRowHeightDifference <= 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -304,6 +337,8 @@ public partial class SettingsWindow : Window
             RepeatLeftDifference = repeatLeftDifference, RepeatWidthDifference = repeatWidthDifference,
             Language = SelectedSettings.Language.ToString(),
             LanguageLeftDifference = languageLeftDifference, LanguageWidthDifference = languageWidthDifference,
+            StartupEnabled = _startupEnabled, StartupLeftDifference = startupLeftDifference,
+            StartupWidthDifference = startupWidthDifference,
             ControlHeight = expectedHeight, TopDifference = topDifference,
             BottomDifference = bottomDifference, RightDifference = rightDifference,
             CalendarRightDifference = calendarRightDifference,
@@ -322,6 +357,7 @@ public partial class SettingsWindow : Window
     private bool WriteGoogleLayoutReport(string path)
     {
         var controls = new FrameworkElement[] { LanguageChoice, CardSizeChoice, SoundChoice, SoundRepeatChoice,
+                StartupWithWindowsCheckBox,
                 PreviewButton, TestNotificationButton }
             .Concat(FindVisualChildren<Button>(GooglePanel).Where(button => button.IsVisible)).ToArray();
         var expected = (double)FindResource("Dimension.ControlHeight");
@@ -332,6 +368,7 @@ public partial class SettingsWindow : Window
         var size = CardSizeChoice.TranslatePoint(new Point(), this);
         var repeat = SoundRepeatChoice.TranslatePoint(new Point(), this);
         var language = LanguageChoice.TranslatePoint(new Point(), this);
+        var startup = StartupWithWindowsCheckBox.TranslatePoint(new Point(), this);
         var row = FindVisualChildren<Button>(GooglePanel).Where(button => button.IsVisible).ToArray();
         var rowYs = row.Select(control => control.TranslatePoint(new Point(), this).Y).ToArray();
         var rowError = rowYs.Length == 0 ? 0 : rowYs.Max() - rowYs.Min();
@@ -339,13 +376,19 @@ public partial class SettingsWindow : Window
             && Math.Abs(sound.X - size.X) <= 1 && Math.Abs(sound.X - google.X) <= 1
             && Math.Abs(sound.X - repeat.X) <= 1
             && Math.Abs(sound.X - language.X) <= 1
+            && Math.Abs(sound.X - startup.X) <= 1
             && Math.Abs(CardSizeChoice.ActualWidth - SoundChoice.ActualWidth) <= 1
             && Math.Abs(SoundRepeatChoice.ActualWidth - SoundChoice.ActualWidth) <= 1
-            && Math.Abs(LanguageChoice.ActualWidth - SoundChoice.ActualWidth) <= 1 && rowError <= 1;
+            && Math.Abs(LanguageChoice.ActualWidth - SoundChoice.ActualWidth) <= 1
+            && Math.Abs(StartupWithWindowsCheckBox.ActualWidth - SoundChoice.ActualWidth) <= 1
+            && rowError <= 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllText(path, JsonSerializer.Serialize(new { Passed = passed, ControlHeight = expected,
             HeightError = heightError, RowTopError = rowError, SoundRowTopError = Math.Abs(sound.Y - preview.Y),
             RepeatLeftError = Math.Abs(sound.X - repeat.X), LanguageLeftError = Math.Abs(sound.X - language.X),
+            StartupLeftError = Math.Abs(sound.X - startup.X),
+            StartupWidthError = Math.Abs(StartupWithWindowsCheckBox.ActualWidth - SoundChoice.ActualWidth),
+            StartupEnabled = _startupEnabled,
             Language = SelectedSettings.Language.ToString(),
             Width = ActualWidth, Height = ActualHeight }, new JsonSerializerOptions { WriteIndented = true }));
         LayoutVerifier.WritePreview(this, path);

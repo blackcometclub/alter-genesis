@@ -8,6 +8,7 @@ using AlterGenesis.NotificationProbe.Diagnostics;
 using AlterGenesis.NotificationProbe.Effects;
 using AlterGenesis.NotificationProbe.Models;
 using AlterGenesis.NotificationProbe.Settings;
+using AlterGenesis.NotificationProbe.Startup;
 using AlterGenesis.NotificationProbe.Notifications;
 using AlterGenesis.NotificationProbe.Interop;
 using AlterGenesis.NotificationProbe.Calendars;
@@ -40,6 +41,7 @@ public partial class App : Application
     private GooglePeriodicRefresh? _googlePeriodicRefresh;
     private ResourceDictionary? _languageResources;
     private AppLanguage? _commandLanguage;
+    private IStartupRegistration _startupRegistration = null!;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -92,6 +94,12 @@ public partial class App : Application
             return;
         }
 
+        if (ReadArgumentValue(e.Args, "--startup-report") is { } startupReport)
+        {
+            Shutdown(StartupRegistrationVerifier.Run(startupReport) ? 0 : 1);
+            return;
+        }
+
         var layoutReportPath = ReadArgumentValue(e.Args, "--layout-report");
         if (layoutReportPath is not null)
         {
@@ -113,6 +121,7 @@ public partial class App : Application
             }
         _store = new AppSettingsStore(directory);
         _calendarStore = new IcalCalendarStore(directory);
+        _startupRegistration = StartupRegistration.ForCurrentProcess();
         var identity = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar).ToUpperInvariant();
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
         _instanceMutex = new Mutex(false, @"Local\TINMOON.AlterGenesis.NotificationProbe." + key);
@@ -123,7 +132,8 @@ public partial class App : Application
         {
             _instanceMutex.Dispose();
             _instanceMutex = null;
-            MessageBox.Show((string)FindResource("Text.AlreadyRunning"), "ALTER GENESIS");
+            if (!e.Args.Contains("--startup", StringComparer.OrdinalIgnoreCase))
+                MessageBox.Show((string)FindResource("Text.AlreadyRunning"), "ALTER GENESIS");
             Shutdown();
             return;
         }
@@ -456,7 +466,8 @@ public partial class App : Application
             return;
         }
         var window = new SettingsWindow(_store, _player!, _settings, AddTestNotifications,
-            _calendarStore, _icalClient, RefreshCalendarEventsAsync, _useGoogle, _googleSession);
+            _calendarStore, _icalClient, RefreshCalendarEventsAsync, _startupRegistration,
+            _useGoogle, _googleSession);
         _settingsWindow = window;
         window.SettingsChanged += (_, _) =>
         {

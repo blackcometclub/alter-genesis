@@ -33,6 +33,8 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="24" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="24" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="8" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="8" />
@@ -95,9 +97,16 @@
             <ComboBoxItem Content="{DynamicResource Text.SoundRepeatFiveMinutes}" Tag="{x:Static effects:NotificationSoundRepeat.FiveMinutes}" />
             <ComboBoxItem Content="{DynamicResource Text.SoundRepeatTenMinutes}" Tag="{x:Static effects:NotificationSoundRepeat.TenMinutes}" />
         </ComboBox>
-        <local:GoogleConnectionPanel Grid.Row="16" Grid.RowSpan="5" x:Name="GooglePanel" Visibility="Collapsed" />
-        <TextBlock Grid.Row="16" x:Name="IcalHeading" Text="{DynamicResource Text.GoogleCalendars}" FontSize="14" />
-        <ItemsControl Grid.Row="18" x:Name="CalendarList"
+        <CheckBox Grid.Row="16" x:Name="StartupWithWindowsCheckBox"
+                  Width="{Binding ActualWidth, ElementName=SoundChoice}" HorizontalAlignment="Left"
+                  Content="{DynamicResource Text.StartWithWindows}"
+                  Style="{StaticResource Style.SettingsCheckBox}"
+                  Checked="StartupWithWindowsChanged" Unchecked="StartupWithWindowsChanged"
+                  AutomationProperties.AutomationId="StartupWithWindows"
+                  AutomationProperties.Name="{DynamicResource Text.StartWithWindows}" />
+        <local:GoogleConnectionPanel Grid.Row="18" Grid.RowSpan="5" x:Name="GooglePanel" Visibility="Collapsed" />
+        <TextBlock Grid.Row="18" x:Name="IcalHeading" Text="{DynamicResource Text.GoogleCalendars}" FontSize="14" />
+        <ItemsControl Grid.Row="20" x:Name="CalendarList"
                       ItemsSource="{Binding CalendarSubscriptions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type calendars:IcalCalendarSubscription}">
@@ -124,7 +133,7 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <Grid Grid.Row="20" x:Name="IcalButtons">
+        <Grid Grid.Row="22" x:Name="IcalButtons">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="8" />
@@ -146,7 +155,7 @@
                     Style="{StaticResource Style.CloseButton}"
                     AutomationProperties.AutomationId="AddCalendar" />
         </Grid>
-        <Button Grid.Row="22" x:Name="TestNotificationButton" HorizontalAlignment="Right"
+        <Button Grid.Row="24" x:Name="TestNotificationButton" HorizontalAlignment="Right"
                 Content="{DynamicResource Text.TestNotification}" Click="TestNotificationClick"
                 Style="{StaticResource Style.CloseButton}"
                 AutomationProperties.AutomationId="TestNotification" />
