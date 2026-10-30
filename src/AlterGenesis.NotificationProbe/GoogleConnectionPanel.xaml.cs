@@ -18,6 +18,8 @@ public partial class GoogleConnectionPanel : UserControl
         Render();
     }
 
+    internal void RefreshLanguage() => Render();
+
     private void PanelLoaded(object sender, RoutedEventArgs e)
     {
         if (_session is not null) _session.Changed += Render;

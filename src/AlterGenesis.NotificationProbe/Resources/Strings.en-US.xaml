@@ -12,6 +12,10 @@
     <system:String x:Key="Text.Close">Close</system:String>
     <system:String x:Key="Text.Settings">Settings</system:String>
     <system:String x:Key="Text.SettingsTitle">Settings — ALTER GENESIS</system:String>
+    <system:String x:Key="Text.Language">Language</system:String>
+    <system:String x:Key="Text.LanguageSystem">System</system:String>
+    <system:String x:Key="Text.LanguageEnglish">English</system:String>
+    <system:String x:Key="Text.LanguageJapanese">日本語</system:String>
     <system:String x:Key="Text.NotificationSound">Notification sound</system:String>
     <system:String x:Key="Text.CardSize">Card size</system:String>
     <system:String x:Key="Text.CardSizeSmall">Small</system:String>

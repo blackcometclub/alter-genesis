@@ -89,6 +89,7 @@ internal static class IcalVerifier
                 && scheduled.Select(item => item.Item.Id).Distinct(StringComparer.Ordinal).Count() == 5);
             var allDayNotification = scheduled.Single(item => item.Item.Title == "All Day");
             Check("all-day notification waits until 09:00 local", allDayNotification.Item.StartTime == "終日"
+                && allDayNotification.Item.StartTimeResourceKey == "Text.AllDay"
                 && allDayNotification.DueAtUtc == new DateTimeOffset(2026, 10, 30, 0, 0, 0, TimeSpan.Zero));
 
             var memory = new MemoryStore();
@@ -113,7 +114,8 @@ internal static class IcalVerifier
             Check("scheduled source survives restart", scheduledStore.TrySave(schedule.Items)
                 && new NotificationStore(Path.Combine(root, "scheduled-roundtrip")).Load()
                     .Any(item => item.Status == NotificationStatus.Scheduled
-                        && item.SourceId == subscription.Id));
+                        && item.SourceId == subscription.Id
+                        && item.StartTimeResourceKey == "Text.AllDay"));
         }
 
         using (var client = new IcalFeedClient(new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden))))

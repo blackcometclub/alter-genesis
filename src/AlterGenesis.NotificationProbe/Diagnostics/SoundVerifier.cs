@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using AlterGenesis.NotificationProbe.Effects;
@@ -54,6 +55,23 @@ internal static class SoundVerifier
                 Require(new AppSettingsStore(directory).Load() == settings);
             }
         });
+        Check("All three language choices survive save and reopen", () =>
+        {
+            var directory = Path.Combine(fixtures, "language-roundtrip");
+            foreach (var language in Enum.GetValues<AppLanguage>())
+            {
+                var settings = AppSettings.Default with { Language = language };
+                Require(new AppSettingsStore(directory).TrySave(settings));
+                Require(new AppSettingsStore(directory).Load() == settings);
+            }
+        });
+        Check("System language follows Japanese UI and otherwise falls back to English", () =>
+        {
+            Require(AppLanguageResolver.Resolve(AppLanguage.System, CultureInfo.GetCultureInfo("ja-JP")) == "ja-JP");
+            Require(AppLanguageResolver.Resolve(AppLanguage.System, CultureInfo.GetCultureInfo("fr-FR")) == "en-US");
+            Require(AppLanguageResolver.Resolve(AppLanguage.English, CultureInfo.GetCultureInfo("ja-JP")) == "en-US");
+            Require(AppLanguageResolver.Resolve(AppLanguage.Japanese, CultureInfo.GetCultureInfo("en-US")) == "ja-JP");
+        });
         var invalidCases = new[] { "{broken", "null", "{}",
             "{\"Version\":2,\"Sound\":\"Koron\"}",
             "{\"Version\":1,\"Sound\":\"Unknown\"}",
@@ -61,7 +79,9 @@ internal static class SoundVerifier
             "{\"Version\":1,\"Sound\":\"Koron\",\"CardSize\":\"Unknown\"}",
             "{\"Version\":1,\"Sound\":\"Koron\",\"CardSize\":99}",
             "{\"Version\":1,\"Sound\":\"Koron\",\"SoundRepeat\":\"Unknown\"}",
-            "{\"Version\":1,\"Sound\":\"Koron\",\"SoundRepeat\":99}" };
+            "{\"Version\":1,\"Sound\":\"Koron\",\"SoundRepeat\":99}",
+            "{\"Version\":1,\"Sound\":\"Koron\",\"Language\":\"Unknown\"}",
+            "{\"Version\":1,\"Sound\":\"Koron\",\"Language\":99}" };
         for (var index = 0; index < invalidCases.Length; index++)
         {
             var caseIndex = index;
@@ -95,7 +115,7 @@ internal static class SoundVerifier
             File.WriteAllText(store.FilePath, original);
             var settings = store.Load();
             Require(settings.Sound == NotificationSound.Pikon && settings.CardSize == NotificationCardSize.Large
-                && settings.SoundRepeat == NotificationSoundRepeat.None);
+                && settings.SoundRepeat == NotificationSoundRepeat.None && settings.Language == AppLanguage.System);
             Require(File.ReadAllText(store.FilePath) == original);
             Require(store.TrySave(settings with { CardSize = NotificationCardSize.Small }));
             Require(new AppSettingsStore(directory).Load() == (settings with { CardSize = NotificationCardSize.Small }));

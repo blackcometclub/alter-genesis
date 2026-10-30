@@ -9,4 +9,6 @@ public sealed record NotificationItem(
     Uri EventUri)
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
+    public string? StartTimeResourceKey { get; init; }
+    public string? TitleResourceKey { get; init; }
 }

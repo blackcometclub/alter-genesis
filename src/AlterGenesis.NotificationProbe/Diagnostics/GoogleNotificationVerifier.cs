@@ -132,7 +132,8 @@ internal static class GoogleNotificationVerifier
             var scheduled = GoogleNotificationReader.Create(calendar, item, null, now, [], japan,
                 "Untitled", "All day").Single();
             Require(scheduled.DueAtUtc == DateTimeOffset.Parse("2026-10-30T00:00:00Z")
-                && scheduled.Item.StartTime == "All day");
+                && scheduled.Item.StartTime == "All day"
+                && scheduled.Item.StartTimeResourceKey == "Text.AllDay");
             var repeated = GoogleNotificationReader.Create(calendar, item, null, now, [], japan,
                 "Untitled", "All day").Single();
             Require(repeated.Item.Id == scheduled.Item.Id);

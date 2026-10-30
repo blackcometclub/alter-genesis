@@ -22,7 +22,7 @@ public partial class MainWindow : Window
         string? layoutReportPath = null,
         NotificationCardSize cardSize = NotificationCardSize.Small)
     {
-        Notifications = new ObservableCollection<NotificationItem>(notifications);
+        Notifications = new ObservableCollection<NotificationItem>(notifications.Select(Localize));
         _layoutReportPath = layoutReportPath;
         SetCardSize(cardSize);
 
@@ -50,6 +50,12 @@ public partial class MainWindow : Window
         MaxWidth = layout.Width;
         MinWidth = layout.Width;
         Width = layout.Width;
+    }
+
+    internal void RefreshLanguage()
+    {
+        for (var index = 0; index < Notifications.Count; index++)
+            Notifications[index] = Localize(Notifications[index]);
     }
     public event EventHandler? SettingsRequested;
     internal event Action<NotificationItem, int?>? NotificationActionRequested;
@@ -177,4 +183,13 @@ public partial class MainWindow : Window
         Left = Math.Max(workArea.Left, workArea.Right - ActualWidth - ScreenMargin);
         Top = Math.Max(workArea.Top, workArea.Bottom - ActualHeight - ScreenMargin);
     }
+
+    private static NotificationItem Localize(NotificationItem item) => item with
+    {
+        StartTime = FindText(item.StartTimeResourceKey) ?? item.StartTime,
+        Title = FindText(item.TitleResourceKey) ?? item.Title,
+    };
+
+    private static string? FindText(string? key) => key is null
+        ? null : Application.Current.TryFindResource(key) as string;
 }

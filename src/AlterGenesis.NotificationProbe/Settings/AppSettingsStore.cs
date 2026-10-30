@@ -8,11 +8,12 @@ namespace AlterGenesis.NotificationProbe.Settings;
 
 public sealed record AppSettings(int Version, NotificationSound Sound,
     NotificationCardSize CardSize = NotificationCardSize.Large,
-    NotificationSoundRepeat SoundRepeat = NotificationSoundRepeat.None)
+    NotificationSoundRepeat SoundRepeat = NotificationSoundRepeat.None,
+    AppLanguage Language = AppLanguage.System)
 {
-    // Missing CardSize keeps the old large layout; missing SoundRepeat keeps the old one-shot behavior.
+    // Missing values preserve the legacy large layout, one-shot sound and system language.
     public static AppSettings Default => new(1, NotificationSound.Koron,
-        NotificationCardSize.Small, NotificationSoundRepeat.None);
+        NotificationCardSize.Small, NotificationSoundRepeat.None, AppLanguage.System);
 }
 
 public sealed class AppSettingsStore(string directory)
@@ -32,7 +33,8 @@ public sealed class AppSettingsStore(string directory)
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions);
             if (settings is not { Version: 1 } || !Enum.IsDefined(settings.Sound)
-                || !Enum.IsDefined(settings.CardSize) || !Enum.IsDefined(settings.SoundRepeat))
+                || !Enum.IsDefined(settings.CardSize) || !Enum.IsDefined(settings.SoundRepeat)
+                || !Enum.IsDefined(settings.Language))
                 throw new InvalidDataException("Unsupported sound settings.");
             return settings;
         }
@@ -51,7 +53,8 @@ public sealed class AppSettingsStore(string directory)
     public bool TrySave(AppSettings settings)
     {
         if (LoadFailed || settings.Version != 1 || !Enum.IsDefined(settings.Sound)
-            || !Enum.IsDefined(settings.CardSize) || !Enum.IsDefined(settings.SoundRepeat))
+            || !Enum.IsDefined(settings.CardSize) || !Enum.IsDefined(settings.SoundRepeat)
+            || !Enum.IsDefined(settings.Language))
             return false;
         var temporaryPath = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try

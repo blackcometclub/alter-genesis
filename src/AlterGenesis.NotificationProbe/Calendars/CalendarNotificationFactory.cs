@@ -26,7 +26,9 @@ internal static class CalendarNotificationFactory
                 : occurrence.StartsAtUtc;
             if (dueAtUtc < nowUtc || dueAtUtc >= throughUtc) continue;
 
-            var title = NormalizeTitle(occurrence.Title, untitledText);
+            var normalizedTitle = occurrence.Title.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            var isUntitled = string.IsNullOrWhiteSpace(normalizedTitle);
+            var title = isUntitled ? untitledText : normalizedTitle;
             var startTime = occurrence.IsAllDay
                 ? allDayText
                 : TimeZoneInfo.ConvertTime(occurrence.StartsAtUtc, localTimeZone).ToString("HH:mm");
@@ -35,6 +37,8 @@ internal static class CalendarNotificationFactory
             var item = new NotificationItem(startTime, title, subscription.ColorBrush, GoogleCalendarHome)
             {
                 Id = id,
+                StartTimeResourceKey = occurrence.IsAllDay ? "Text.AllDay" : null,
+                TitleResourceKey = isUntitled ? "Text.UntitledEvent" : null,
             };
             items.Add(new ScheduledNotification(item, dueAtUtc, subscription.Id));
         }
@@ -46,12 +50,6 @@ internal static class CalendarNotificationFactory
     {
         var local = date.ToDateTime(time, DateTimeKind.Unspecified);
         return new DateTimeOffset(local, timeZone.GetUtcOffset(local)).ToUniversalTime();
-    }
-
-    private static string NormalizeTitle(string title, string fallback)
-    {
-        var normalized = title.Replace('\r', ' ').Replace('\n', ' ').Trim();
-        return string.IsNullOrWhiteSpace(normalized) ? fallback : normalized;
     }
 
     private static string CreateStableId(string subscriptionId, string eventUid,

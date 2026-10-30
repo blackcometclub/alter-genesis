@@ -26,6 +26,7 @@ public partial class SettingsWindow : Window
     private bool _ready;
     private bool _calendarLoadErrorShown;
     private bool _refreshingCalendarEvents;
+    private string? _calendarRefreshStatusKey;
     private readonly bool _useGoogle;
 
     internal SettingsWindow(AppSettingsStore store, INotificationSoundPlayer player,
@@ -56,7 +57,7 @@ public partial class SettingsWindow : Window
         SourceInitialized += (_, _) => DwmWindow.Apply(new WindowInteropHelper(this).Handle);
         Loaded += (_, _) =>
         {
-            CardSizeChoice.Focus();
+            LanguageChoice.Focus();
             if (!useGoogle && _calendarStore.LoadFailed && !_calendarLoadErrorShown)
             {
                 _calendarLoadErrorShown = true;
@@ -69,6 +70,13 @@ public partial class SettingsWindow : Window
     public AppSettings SelectedSettings { get; private set; }
     public ObservableCollection<IcalCalendarSubscription> CalendarSubscriptions { get; }
     public event EventHandler? SettingsChanged;
+
+    private void LanguageSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready || LanguageChoice.SelectedValue is not AppLanguage language
+            || language == SelectedSettings.Language) return;
+        TryChangeSettings(SelectedSettings with { Language = language });
+    }
 
     private void SoundSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -113,6 +121,7 @@ public partial class SettingsWindow : Window
         SoundChoice.SelectedValue = SelectedSettings.Sound;
         SoundRepeatChoice.SelectedValue = SelectedSettings.SoundRepeat;
         CardSizeChoice.SelectedValue = SelectedSettings.CardSize;
+        LanguageChoice.SelectedValue = SelectedSettings.Language;
         PreviewButton.IsEnabled = SelectedSettings.Sound != NotificationSound.None;
         _ready = true;
     }
@@ -153,18 +162,21 @@ public partial class SettingsWindow : Window
     {
         if (_refreshingCalendarEvents || CalendarSubscriptions.Count == 0) return;
         _refreshingCalendarEvents = true;
-        CalendarRefreshStatus.Text = (string)FindResource("Text.CalendarEventsRefreshing");
+        _calendarRefreshStatusKey = "Text.CalendarEventsRefreshing";
+        RefreshCalendarStatusText();
         UpdateCalendarRefreshAvailability();
         try
         {
             var succeeded = await _refreshCalendarEvents(CalendarSubscriptions.ToArray());
-            CalendarRefreshStatus.Text = (string)FindResource(succeeded
+            _calendarRefreshStatusKey = succeeded
                 ? "Text.CalendarEventsRefreshSucceeded"
-                : "Text.CalendarEventsRefreshFailed");
+                : "Text.CalendarEventsRefreshFailed";
+            RefreshCalendarStatusText();
         }
         catch (Exception)
         {
-            CalendarRefreshStatus.Text = (string)FindResource("Text.CalendarEventsRefreshFailed");
+            _calendarRefreshStatusKey = "Text.CalendarEventsRefreshFailed";
+            RefreshCalendarStatusText();
         }
         finally
         {
@@ -221,6 +233,15 @@ public partial class SettingsWindow : Window
     private void ShowError(string key) => MessageBox.Show(this, (string)FindResource(key),
         (string)FindResource("Text.SettingsTitle"), MessageBoxButton.OK, MessageBoxImage.None);
 
+    internal void RefreshLanguage()
+    {
+        RefreshCalendarStatusText();
+        GooglePanel.RefreshLanguage();
+    }
+
+    private void RefreshCalendarStatusText() => CalendarRefreshStatus.Text =
+        _calendarRefreshStatusKey is null ? "" : (string)FindResource(_calendarRefreshStatusKey);
+
     internal bool WriteLayoutReport(string path)
     {
         if (_useGoogle) return WriteGoogleLayoutReport(path);
@@ -231,6 +252,7 @@ public partial class SettingsWindow : Window
         var refreshEvents = RefreshCalendarEventsButton.TranslatePoint(new Point(), this);
         var sizeChoice = CardSizeChoice.TranslatePoint(new Point(), this);
         var repeatChoice = SoundRepeatChoice.TranslatePoint(new Point(), this);
+        var languageChoice = LanguageChoice.TranslatePoint(new Point(), this);
         var expectedHeight = (double)FindResource("Dimension.ControlHeight");
         var topDifference = Math.Abs(choice.Y - preview.Y);
         var bottomDifference = Math.Abs(choice.Y + SoundChoice.ActualHeight - preview.Y - PreviewButton.ActualHeight);
@@ -243,6 +265,8 @@ public partial class SettingsWindow : Window
         var choiceWidthDifference = Math.Abs(CardSizeChoice.ActualWidth - SoundChoice.ActualWidth);
         var repeatLeftDifference = Math.Abs(repeatChoice.X - choice.X);
         var repeatWidthDifference = Math.Abs(SoundRepeatChoice.ActualWidth - SoundChoice.ActualWidth);
+        var languageLeftDifference = Math.Abs(languageChoice.X - choice.X);
+        var languageWidthDifference = Math.Abs(LanguageChoice.ActualWidth - SoundChoice.ActualWidth);
         var rowButtons = FindVisualChildren<Button>(CalendarList)
             .Where(button => button.CommandParameter is IcalCalendarSubscription).Take(2).ToArray();
         var calendarRowTopDifference = 0d;
@@ -265,8 +289,10 @@ public partial class SettingsWindow : Window
             && Math.Abs(RefreshCalendarEventsButton.ActualHeight - expectedHeight) <= 1
             && Math.Abs(CardSizeChoice.ActualHeight - expectedHeight) <= 1
             && Math.Abs(SoundRepeatChoice.ActualHeight - expectedHeight) <= 1
+            && Math.Abs(LanguageChoice.ActualHeight - expectedHeight) <= 1
             && choiceLeftDifference <= 1 && choiceWidthDifference <= 1 && calendarRightDifference <= 1
             && repeatLeftDifference <= 1 && repeatWidthDifference <= 1
+            && languageLeftDifference <= 1 && languageWidthDifference <= 1
             && calendarButtonTopDifference <= 1 && calendarButtonBottomDifference <= 1
             && calendarRowTopDifference <= 1 && calendarRowBottomDifference <= 1 && calendarRowHeightDifference <= 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -276,6 +302,8 @@ public partial class SettingsWindow : Window
             CardSize = SelectedSettings.CardSize.ToString(), ChoiceLeftDifference = choiceLeftDifference,
             ChoiceWidthDifference = choiceWidthDifference, Repeat = SelectedSettings.SoundRepeat.ToString(),
             RepeatLeftDifference = repeatLeftDifference, RepeatWidthDifference = repeatWidthDifference,
+            Language = SelectedSettings.Language.ToString(),
+            LanguageLeftDifference = languageLeftDifference, LanguageWidthDifference = languageWidthDifference,
             ControlHeight = expectedHeight, TopDifference = topDifference,
             BottomDifference = bottomDifference, RightDifference = rightDifference,
             CalendarRightDifference = calendarRightDifference,
@@ -293,7 +321,7 @@ public partial class SettingsWindow : Window
 
     private bool WriteGoogleLayoutReport(string path)
     {
-        var controls = new FrameworkElement[] { CardSizeChoice, SoundChoice, SoundRepeatChoice,
+        var controls = new FrameworkElement[] { LanguageChoice, CardSizeChoice, SoundChoice, SoundRepeatChoice,
                 PreviewButton, TestNotificationButton }
             .Concat(FindVisualChildren<Button>(GooglePanel).Where(button => button.IsVisible)).ToArray();
         var expected = (double)FindResource("Dimension.ControlHeight");
@@ -303,18 +331,22 @@ public partial class SettingsWindow : Window
         var google = GooglePanel.TranslatePoint(new Point(), this);
         var size = CardSizeChoice.TranslatePoint(new Point(), this);
         var repeat = SoundRepeatChoice.TranslatePoint(new Point(), this);
+        var language = LanguageChoice.TranslatePoint(new Point(), this);
         var row = FindVisualChildren<Button>(GooglePanel).Where(button => button.IsVisible).ToArray();
         var rowYs = row.Select(control => control.TranslatePoint(new Point(), this).Y).ToArray();
         var rowError = rowYs.Length == 0 ? 0 : rowYs.Max() - rowYs.Min();
         var passed = heightError <= 1 && Math.Abs(sound.Y - preview.Y) <= 1
             && Math.Abs(sound.X - size.X) <= 1 && Math.Abs(sound.X - google.X) <= 1
             && Math.Abs(sound.X - repeat.X) <= 1
+            && Math.Abs(sound.X - language.X) <= 1
             && Math.Abs(CardSizeChoice.ActualWidth - SoundChoice.ActualWidth) <= 1
-            && Math.Abs(SoundRepeatChoice.ActualWidth - SoundChoice.ActualWidth) <= 1 && rowError <= 1;
+            && Math.Abs(SoundRepeatChoice.ActualWidth - SoundChoice.ActualWidth) <= 1
+            && Math.Abs(LanguageChoice.ActualWidth - SoundChoice.ActualWidth) <= 1 && rowError <= 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllText(path, JsonSerializer.Serialize(new { Passed = passed, ControlHeight = expected,
             HeightError = heightError, RowTopError = rowError, SoundRowTopError = Math.Abs(sound.Y - preview.Y),
-            RepeatLeftError = Math.Abs(sound.X - repeat.X),
+            RepeatLeftError = Math.Abs(sound.X - repeat.X), LanguageLeftError = Math.Abs(sound.X - language.X),
+            Language = SelectedSettings.Language.ToString(),
             Width = ActualWidth, Height = ActualHeight }, new JsonSerializerOptions { WriteIndented = true }));
         LayoutVerifier.WritePreview(this, path);
         return passed;

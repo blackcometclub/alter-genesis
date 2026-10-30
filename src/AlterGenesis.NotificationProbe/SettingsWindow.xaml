@@ -4,6 +4,7 @@
         xmlns:effects="clr-namespace:AlterGenesis.NotificationProbe.Effects"
         xmlns:models="clr-namespace:AlterGenesis.NotificationProbe.Models"
         xmlns:calendars="clr-namespace:AlterGenesis.NotificationProbe.Calendars"
+        xmlns:settings="clr-namespace:AlterGenesis.NotificationProbe.Settings"
         xmlns:local="clr-namespace:AlterGenesis.NotificationProbe"
         Title="{DynamicResource Text.SettingsTitle}"
         Width="408" SizeToContent="Height" ResizeMode="NoResize"
@@ -30,13 +31,28 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="8" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="24" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="8" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="24" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <TextBlock Text="{DynamicResource Text.CardSize}" FontSize="14" />
-        <ComboBox Grid.Row="2" x:Name="CardSizeChoice"
+        <TextBlock Text="{DynamicResource Text.Language}" FontSize="14" />
+        <ComboBox Grid.Row="2" x:Name="LanguageChoice"
+                  Width="{Binding ActualWidth, ElementName=SoundChoice}" HorizontalAlignment="Left"
+                  Style="{StaticResource Style.CompactComboBox}"
+                  SelectedValuePath="Tag" SelectionChanged="LanguageSelectionChanged"
+                  AutomationProperties.AutomationId="LanguageChoice"
+                  AutomationProperties.Name="{DynamicResource Text.Language}">
+            <ComboBoxItem Content="{DynamicResource Text.LanguageSystem}" Tag="{x:Static settings:AppLanguage.System}" />
+            <ComboBoxItem Content="{DynamicResource Text.LanguageEnglish}" Tag="{x:Static settings:AppLanguage.English}" />
+            <ComboBoxItem Content="{DynamicResource Text.LanguageJapanese}" Tag="{x:Static settings:AppLanguage.Japanese}" />
+        </ComboBox>
+        <TextBlock Grid.Row="4" Text="{DynamicResource Text.CardSize}" FontSize="14" />
+        <ComboBox Grid.Row="6" x:Name="CardSizeChoice"
                   Width="{Binding ActualWidth, ElementName=SoundChoice}" HorizontalAlignment="Left"
                   Style="{StaticResource Style.CompactComboBox}"
                   SelectedValuePath="Tag" SelectionChanged="CardSizeSelectionChanged"
@@ -45,8 +61,8 @@
             <ComboBoxItem Content="{DynamicResource Text.CardSizeSmall}" Tag="{x:Static models:NotificationCardSize.Small}" />
             <ComboBoxItem Content="{DynamicResource Text.CardSizeLarge}" Tag="{x:Static models:NotificationCardSize.Large}" />
         </ComboBox>
-        <TextBlock Grid.Row="4" Text="{DynamicResource Text.NotificationSound}" FontSize="14" />
-        <Grid Grid.Row="6">
+        <TextBlock Grid.Row="8" Text="{DynamicResource Text.NotificationSound}" FontSize="14" />
+        <Grid Grid.Row="10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="8" />
@@ -66,8 +82,8 @@
                     Style="{StaticResource Style.CloseButton}"
                     AutomationProperties.AutomationId="PreviewSound" />
         </Grid>
-        <TextBlock Grid.Row="8" Text="{DynamicResource Text.SoundRepeat}" FontSize="14" />
-        <ComboBox Grid.Row="10" x:Name="SoundRepeatChoice"
+        <TextBlock Grid.Row="12" Text="{DynamicResource Text.SoundRepeat}" FontSize="14" />
+        <ComboBox Grid.Row="14" x:Name="SoundRepeatChoice"
                   Width="{Binding ActualWidth, ElementName=SoundChoice}" HorizontalAlignment="Left"
                   Style="{StaticResource Style.CompactComboBox}"
                   SelectedValuePath="Tag" SelectionChanged="SoundRepeatSelectionChanged"
@@ -79,9 +95,9 @@
             <ComboBoxItem Content="{DynamicResource Text.SoundRepeatFiveMinutes}" Tag="{x:Static effects:NotificationSoundRepeat.FiveMinutes}" />
             <ComboBoxItem Content="{DynamicResource Text.SoundRepeatTenMinutes}" Tag="{x:Static effects:NotificationSoundRepeat.TenMinutes}" />
         </ComboBox>
-        <local:GoogleConnectionPanel Grid.Row="12" Grid.RowSpan="5" x:Name="GooglePanel" Visibility="Collapsed" />
-        <TextBlock Grid.Row="12" x:Name="IcalHeading" Text="{DynamicResource Text.GoogleCalendars}" FontSize="14" />
-        <ItemsControl Grid.Row="14" x:Name="CalendarList"
+        <local:GoogleConnectionPanel Grid.Row="16" Grid.RowSpan="5" x:Name="GooglePanel" Visibility="Collapsed" />
+        <TextBlock Grid.Row="16" x:Name="IcalHeading" Text="{DynamicResource Text.GoogleCalendars}" FontSize="14" />
+        <ItemsControl Grid.Row="18" x:Name="CalendarList"
                       ItemsSource="{Binding CalendarSubscriptions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type calendars:IcalCalendarSubscription}">
@@ -108,7 +124,7 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <Grid Grid.Row="16" x:Name="IcalButtons">
+        <Grid Grid.Row="20" x:Name="IcalButtons">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="8" />
@@ -130,7 +146,7 @@
                     Style="{StaticResource Style.CloseButton}"
                     AutomationProperties.AutomationId="AddCalendar" />
         </Grid>
-        <Button Grid.Row="18" x:Name="TestNotificationButton" HorizontalAlignment="Right"
+        <Button Grid.Row="22" x:Name="TestNotificationButton" HorizontalAlignment="Right"
                 Content="{DynamicResource Text.TestNotification}" Click="TestNotificationClick"
                 Style="{StaticResource Style.CloseButton}"
                 AutomationProperties.AutomationId="TestNotification" />

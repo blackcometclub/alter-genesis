@@ -38,12 +38,14 @@ public partial class App : Application
     private bool _useGoogle;
     private GoogleNotificationSession? _googleSession;
     private GooglePeriodicRefresh? _googlePeriodicRefresh;
+    private ResourceDictionary? _languageResources;
+    private AppLanguage? _commandLanguage;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        ConfigureLanguage(e.Args);
+        ConfigureInitialLanguage(e.Args);
         _args = e.Args;
         _useGoogle = !e.Args.Contains("--ical", StringComparer.OrdinalIgnoreCase);
 
@@ -127,6 +129,7 @@ public partial class App : Application
         }
 
         _settings = _store.Load();
+        if (_commandLanguage is null) ApplyLanguage(_settings.Language);
         _player = new WaveSoundPlayer();
         _soundRepeater = new RepeatingSoundController(_player, () => _settings);
         if (ReadArgumentValue(e.Args, "--settings-layout-report") is not null)
@@ -458,9 +461,17 @@ public partial class App : Application
         window.SettingsChanged += (_, _) =>
         {
             var sizeChanged = _settings.CardSize != window.SelectedSettings.CardSize;
+            var languageChanged = _settings.Language != window.SelectedSettings.Language;
             var soundTimingChanged = _settings.Sound != window.SelectedSettings.Sound
                 || _settings.SoundRepeat != window.SelectedSettings.SoundRepeat;
             _settings = window.SelectedSettings;
+            if (languageChanged)
+            {
+                ApplyLanguage(_settings.Language);
+                _tray?.UpdateText((string)FindResource("Text.Settings"), (string)FindResource("Text.Exit"));
+                window.RefreshLanguage();
+                _notificationWindow?.RefreshLanguage();
+            }
             if (sizeChanged) _notificationWindow?.SetCardSize(_settings.CardSize);
             _soundRepeater?.Update(_schedule?.Visible.Count > 0, resetCountdown: soundTimingChanged);
             UpdateReminderTimer();
@@ -493,21 +504,28 @@ public partial class App : Application
     private sealed record CalendarReadResult(IcalCalendarSubscription Calendar,
         IcalCalendarSnapshot? Snapshot, bool Succeeded);
 
-    private void ConfigureLanguage(IReadOnlyCollection<string> args)
+    private void ConfigureInitialLanguage(IReadOnlyCollection<string> args)
     {
         var requestedLanguage = ReadArgumentValue(args, "--lang");
-        var language = requestedLanguage?.ToLowerInvariant() switch
+        _commandLanguage = requestedLanguage?.ToLowerInvariant() switch
         {
-            "ja" or "ja-jp" => "ja-JP",
-            "en" or "en-us" => "en-US",
-            _ when CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ja" => "ja-JP",
-            _ => "en-US",
+            "ja" or "ja-jp" => AppLanguage.Japanese,
+            "en" or "en-us" => AppLanguage.English,
+            _ => null,
         };
+        ApplyLanguage(_commandLanguage ?? AppLanguage.System);
+    }
 
-        Resources.MergedDictionaries.Insert(0, new ResourceDictionary
+    private void ApplyLanguage(AppLanguage language)
+    {
+        var resourceLanguage = AppLanguageResolver.Resolve(language, CultureInfo.CurrentUICulture);
+        var next = new ResourceDictionary
         {
-            Source = new Uri($"Resources/Strings.{language}.xaml", UriKind.Relative),
-        });
+            Source = new Uri($"Resources/Strings.{resourceLanguage}.xaml", UriKind.Relative),
+        };
+        if (_languageResources is not null) Resources.MergedDictionaries.Remove(_languageResources);
+        Resources.MergedDictionaries.Insert(0, next);
+        _languageResources = next;
     }
 
     private static string? ReadArgumentValue(IEnumerable<string> args, string name)

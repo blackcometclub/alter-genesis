@@ -75,7 +75,8 @@ internal static class GoogleNotificationReader
         if (string.IsNullOrWhiteSpace(item.Id)) throw new InvalidDataException("Missing event identity.");
         var source = SourceId(calendar.Id);
         var title = (item.Summary ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
-        if (title.Length == 0) title = untitled;
+        var isUntitled = title.Length == 0;
+        if (isUntitled) title = untitled;
         var color = Regex.IsMatch(calendar.Color ?? "", "^#[0-9a-fA-F]{6}$") ? calendar.Color : "#71859C";
         var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color!));
         brush.Freeze();
@@ -94,7 +95,11 @@ internal static class GoogleNotificationReader
             var id = "google-" + Hash(JsonSerializer.Serialize(new[] { source, item.Id,
                 date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "all-day-09:00" }));
             var scheduled = new ScheduledNotification(new NotificationItem(allDay, title, brush, eventUri)
-                { Id = id }, due, source);
+            {
+                Id = id,
+                StartTimeResourceKey = "Text.AllDay",
+                TitleResourceKey = isUntitled ? "Text.UntitledEvent" : null,
+            }, due, source);
             return due < now.AddDays(30) && (due >= now || existing.Contains(id)) ? [scheduled] : [];
         }
 
@@ -109,7 +114,7 @@ internal static class GoogleNotificationReader
                 start.ToString("O", CultureInfo.InvariantCulture), reminder.MinutesBefore.ToString(CultureInfo.InvariantCulture) }));
             return new ScheduledNotification(new NotificationItem(
                 TimeZoneInfo.ConvertTime(start, zone).ToString("HH:mm", CultureInfo.InvariantCulture), title, brush, eventUri)
-                { Id = id }, reminder.DueAtUtc, source);
+                { Id = id, TitleResourceKey = isUntitled ? "Text.UntitledEvent" : null }, reminder.DueAtUtc, source);
         }).Where(value => value.DueAtUtc < now.AddDays(30)
             && (value.DueAtUtc >= now || existing.Contains(value.Item.Id))).ToArray();
     }
