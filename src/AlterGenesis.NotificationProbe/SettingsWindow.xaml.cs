@@ -78,6 +78,13 @@ public partial class SettingsWindow : Window
         if (TryChangeSettings(SelectedSettings with { Sound = sound })) _player.Stop();
     }
 
+    private void SoundRepeatSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready || SoundRepeatChoice.SelectedValue is not NotificationSoundRepeat repeat
+            || repeat == SelectedSettings.SoundRepeat) return;
+        TryChangeSettings(SelectedSettings with { SoundRepeat = repeat });
+    }
+
     private void CardSizeSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_ready || CardSizeChoice.SelectedValue is not NotificationCardSize size || size == SelectedSettings.CardSize)
@@ -104,6 +111,7 @@ public partial class SettingsWindow : Window
     {
         _ready = false;
         SoundChoice.SelectedValue = SelectedSettings.Sound;
+        SoundRepeatChoice.SelectedValue = SelectedSettings.SoundRepeat;
         CardSizeChoice.SelectedValue = SelectedSettings.CardSize;
         PreviewButton.IsEnabled = SelectedSettings.Sound != NotificationSound.None;
         _ready = true;
@@ -222,6 +230,7 @@ public partial class SettingsWindow : Window
         var add = AddCalendarButton.TranslatePoint(new Point(), this);
         var refreshEvents = RefreshCalendarEventsButton.TranslatePoint(new Point(), this);
         var sizeChoice = CardSizeChoice.TranslatePoint(new Point(), this);
+        var repeatChoice = SoundRepeatChoice.TranslatePoint(new Point(), this);
         var expectedHeight = (double)FindResource("Dimension.ControlHeight");
         var topDifference = Math.Abs(choice.Y - preview.Y);
         var bottomDifference = Math.Abs(choice.Y + SoundChoice.ActualHeight - preview.Y - PreviewButton.ActualHeight);
@@ -232,6 +241,8 @@ public partial class SettingsWindow : Window
             - refreshEvents.Y - RefreshCalendarEventsButton.ActualHeight);
         var choiceLeftDifference = Math.Abs(sizeChoice.X - choice.X);
         var choiceWidthDifference = Math.Abs(CardSizeChoice.ActualWidth - SoundChoice.ActualWidth);
+        var repeatLeftDifference = Math.Abs(repeatChoice.X - choice.X);
+        var repeatWidthDifference = Math.Abs(SoundRepeatChoice.ActualWidth - SoundChoice.ActualWidth);
         var rowButtons = FindVisualChildren<Button>(CalendarList)
             .Where(button => button.CommandParameter is IcalCalendarSubscription).Take(2).ToArray();
         var calendarRowTopDifference = 0d;
@@ -253,7 +264,9 @@ public partial class SettingsWindow : Window
             && Math.Abs(AddCalendarButton.ActualHeight - expectedHeight) <= 1
             && Math.Abs(RefreshCalendarEventsButton.ActualHeight - expectedHeight) <= 1
             && Math.Abs(CardSizeChoice.ActualHeight - expectedHeight) <= 1
+            && Math.Abs(SoundRepeatChoice.ActualHeight - expectedHeight) <= 1
             && choiceLeftDifference <= 1 && choiceWidthDifference <= 1 && calendarRightDifference <= 1
+            && repeatLeftDifference <= 1 && repeatWidthDifference <= 1
             && calendarButtonTopDifference <= 1 && calendarButtonBottomDifference <= 1
             && calendarRowTopDifference <= 1 && calendarRowBottomDifference <= 1 && calendarRowHeightDifference <= 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -261,7 +274,8 @@ public partial class SettingsWindow : Window
         {
             Passed = passed, SelectedSound = SelectedSettings.Sound.ToString(),
             CardSize = SelectedSettings.CardSize.ToString(), ChoiceLeftDifference = choiceLeftDifference,
-            ChoiceWidthDifference = choiceWidthDifference,
+            ChoiceWidthDifference = choiceWidthDifference, Repeat = SelectedSettings.SoundRepeat.ToString(),
+            RepeatLeftDifference = repeatLeftDifference, RepeatWidthDifference = repeatWidthDifference,
             ControlHeight = expectedHeight, TopDifference = topDifference,
             BottomDifference = bottomDifference, RightDifference = rightDifference,
             CalendarRightDifference = calendarRightDifference,
@@ -279,7 +293,8 @@ public partial class SettingsWindow : Window
 
     private bool WriteGoogleLayoutReport(string path)
     {
-        var controls = new FrameworkElement[] { CardSizeChoice, SoundChoice, PreviewButton, TestNotificationButton }
+        var controls = new FrameworkElement[] { CardSizeChoice, SoundChoice, SoundRepeatChoice,
+                PreviewButton, TestNotificationButton }
             .Concat(FindVisualChildren<Button>(GooglePanel).Where(button => button.IsVisible)).ToArray();
         var expected = (double)FindResource("Dimension.ControlHeight");
         var heightError = controls.Max(control => Math.Abs(control.ActualHeight - expected));
@@ -287,15 +302,19 @@ public partial class SettingsWindow : Window
         var preview = PreviewButton.TranslatePoint(new Point(), this);
         var google = GooglePanel.TranslatePoint(new Point(), this);
         var size = CardSizeChoice.TranslatePoint(new Point(), this);
+        var repeat = SoundRepeatChoice.TranslatePoint(new Point(), this);
         var row = FindVisualChildren<Button>(GooglePanel).Where(button => button.IsVisible).ToArray();
         var rowYs = row.Select(control => control.TranslatePoint(new Point(), this).Y).ToArray();
         var rowError = rowYs.Length == 0 ? 0 : rowYs.Max() - rowYs.Min();
         var passed = heightError <= 1 && Math.Abs(sound.Y - preview.Y) <= 1
             && Math.Abs(sound.X - size.X) <= 1 && Math.Abs(sound.X - google.X) <= 1
-            && Math.Abs(CardSizeChoice.ActualWidth - SoundChoice.ActualWidth) <= 1 && rowError <= 1;
+            && Math.Abs(sound.X - repeat.X) <= 1
+            && Math.Abs(CardSizeChoice.ActualWidth - SoundChoice.ActualWidth) <= 1
+            && Math.Abs(SoundRepeatChoice.ActualWidth - SoundChoice.ActualWidth) <= 1 && rowError <= 1;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllText(path, JsonSerializer.Serialize(new { Passed = passed, ControlHeight = expected,
             HeightError = heightError, RowTopError = rowError, SoundRowTopError = Math.Abs(sound.Y - preview.Y),
+            RepeatLeftError = Math.Abs(sound.X - repeat.X),
             Width = ActualWidth, Height = ActualHeight }, new JsonSerializerOptions { WriteIndented = true }));
         LayoutVerifier.WritePreview(this, path);
         return passed;

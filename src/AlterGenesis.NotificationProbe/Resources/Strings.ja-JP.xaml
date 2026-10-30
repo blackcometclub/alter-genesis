@@ -20,6 +20,12 @@
     <system:String x:Key="Text.SoundKoron">ころん</system:String>
     <system:String x:Key="Text.SoundKirari">きらり</system:String>
     <system:String x:Key="Text.SoundPikon">ぴこん</system:String>
+    <system:String x:Key="Text.SoundRepeat">鳴り直し</system:String>
+    <system:String x:Key="Text.SoundRepeatNone">なし</system:String>
+    <system:String x:Key="Text.SoundRepeatOneMinute">1分ごと</system:String>
+    <system:String x:Key="Text.SoundRepeatThreeMinutes">3分ごと</system:String>
+    <system:String x:Key="Text.SoundRepeatFiveMinutes">5分ごと</system:String>
+    <system:String x:Key="Text.SoundRepeatTenMinutes">10分ごと</system:String>
     <system:String x:Key="Text.PreviewSound">試聴</system:String>
     <system:String x:Key="Text.TestNotification">通知を試す</system:String>
     <system:String x:Key="Text.GoogleCalendars">Googleカレンダー</system:String>

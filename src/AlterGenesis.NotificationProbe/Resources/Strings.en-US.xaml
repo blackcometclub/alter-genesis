@@ -20,6 +20,12 @@
     <system:String x:Key="Text.SoundKoron">Koron</system:String>
     <system:String x:Key="Text.SoundKirari">Kirari</system:String>
     <system:String x:Key="Text.SoundPikon">Pikon</system:String>
+    <system:String x:Key="Text.SoundRepeat">Repeat sound</system:String>
+    <system:String x:Key="Text.SoundRepeatNone">Off</system:String>
+    <system:String x:Key="Text.SoundRepeatOneMinute">Every 1 min</system:String>
+    <system:String x:Key="Text.SoundRepeatThreeMinutes">Every 3 min</system:String>
+    <system:String x:Key="Text.SoundRepeatFiveMinutes">Every 5 min</system:String>
+    <system:String x:Key="Text.SoundRepeatTenMinutes">Every 10 min</system:String>
     <system:String x:Key="Text.PreviewSound">Preview</system:String>
     <system:String x:Key="Text.TestNotification">Test notification</system:String>
     <system:String x:Key="Text.GoogleCalendars">Google Calendar</system:String>

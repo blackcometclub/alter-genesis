@@ -18,6 +18,7 @@ namespace AlterGenesis.NotificationProbe;
 public partial class App : Application
 {
     private WaveSoundPlayer? _player;
+    private RepeatingSoundController? _soundRepeater;
     private AppSettingsStore _store = null!;
     private AppSettings _settings = AppSettings.Default;
     private IcalCalendarStore _calendarStore = null!;
@@ -126,6 +127,7 @@ public partial class App : Application
 
         _settings = _store.Load();
         _player = new WaveSoundPlayer();
+        _soundRepeater = new RepeatingSoundController(_player, () => _settings);
         if (ReadArgumentValue(e.Args, "--settings-layout-report") is not null)
         {
             ShowSettings();
@@ -152,7 +154,7 @@ public partial class App : Application
         _tray = new TrayIcon((string)FindResource("Text.Settings"), (string)FindResource("Text.Exit"),
             () => Dispatcher.Invoke(ShowSettings), () => Dispatcher.Invoke(() => RequestExit()));
         _reminderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _reminderTimer.Tick += (_, _) => ReleaseDueNotifications();
+        _reminderTimer.Tick += (_, _) => ReminderTimerTick();
 
         if (_useGoogle)
         {
@@ -324,11 +326,26 @@ public partial class App : Application
         if (presented.Count > 0) SynchronizeNotifications(presented);
     }
 
+    private void ReminderTimerTick()
+    {
+        ReleaseDueNotifications();
+        if (_schedule is null || _soundRepeater is null || _exiting) return;
+        _soundRepeater.Tick(_schedule.Visible.Count > 0);
+        UpdateReminderTimer();
+    }
+
+    private void UpdateReminderTimer()
+    {
+        if (_reminderTimer is not null && _schedule is not null && _soundRepeater is not null)
+            _reminderTimer.IsEnabled = _schedule.HasPending || _soundRepeater.IsActive;
+    }
+
     private void SynchronizeNotifications(IReadOnlyCollection<NotificationItem> presented)
     {
         if (_schedule is null || _exiting) return;
-        _reminderTimer!.IsEnabled = _schedule.HasPending;
         var visible = _schedule.Visible;
+        _soundRepeater!.Update(visible.Count > 0);
+        UpdateReminderTimer();
         if (visible.Count == 0)
             _notificationWindow?.Close();
         else if (_notificationWindow is null)
@@ -370,6 +387,8 @@ public partial class App : Application
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         if (_exiting) return;
         await new SoundNotificationEffect(_player!, () => _settings.Sound).OnNotificationPresentedAsync(presented);
+        _soundRepeater!.Update(_schedule!.Visible.Count > 0, resetCountdown: true);
+        UpdateReminderTimer();
         if (_runtimeReport is { } path && _notificationWindow is { } window)
         {
             var layout = LayoutVerifier.Capture(window);
@@ -415,8 +434,12 @@ public partial class App : Application
         window.SettingsChanged += (_, _) =>
         {
             var sizeChanged = _settings.CardSize != window.SelectedSettings.CardSize;
+            var soundTimingChanged = _settings.Sound != window.SelectedSettings.Sound
+                || _settings.SoundRepeat != window.SelectedSettings.SoundRepeat;
             _settings = window.SelectedSettings;
             if (sizeChanged) _notificationWindow?.SetCardSize(_settings.CardSize);
+            _soundRepeater?.Update(_schedule?.Visible.Count > 0, resetCountdown: soundTimingChanged);
+            UpdateReminderTimer();
         };
         window.Closed += (_, _) => { _settingsWindow = null; MaybeExit(); };
         if (ReadArgumentValue(_args, "--settings-layout-report") is { } report)

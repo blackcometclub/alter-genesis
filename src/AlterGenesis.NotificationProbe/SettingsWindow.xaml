@@ -26,6 +26,10 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="8" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="24" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="8" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="24" />
@@ -62,9 +66,22 @@
                     Style="{StaticResource Style.CloseButton}"
                     AutomationProperties.AutomationId="PreviewSound" />
         </Grid>
-        <local:GoogleConnectionPanel Grid.Row="8" Grid.RowSpan="5" x:Name="GooglePanel" Visibility="Collapsed" />
-        <TextBlock Grid.Row="8" x:Name="IcalHeading" Text="{DynamicResource Text.GoogleCalendars}" FontSize="14" />
-        <ItemsControl Grid.Row="10" x:Name="CalendarList"
+        <TextBlock Grid.Row="8" Text="{DynamicResource Text.SoundRepeat}" FontSize="14" />
+        <ComboBox Grid.Row="10" x:Name="SoundRepeatChoice"
+                  Width="{Binding ActualWidth, ElementName=SoundChoice}" HorizontalAlignment="Left"
+                  Style="{StaticResource Style.CompactComboBox}"
+                  SelectedValuePath="Tag" SelectionChanged="SoundRepeatSelectionChanged"
+                  AutomationProperties.AutomationId="NotificationSoundRepeatChoice"
+                  AutomationProperties.Name="{DynamicResource Text.SoundRepeat}">
+            <ComboBoxItem Content="{DynamicResource Text.SoundRepeatNone}" Tag="{x:Static effects:NotificationSoundRepeat.None}" />
+            <ComboBoxItem Content="{DynamicResource Text.SoundRepeatOneMinute}" Tag="{x:Static effects:NotificationSoundRepeat.OneMinute}" />
+            <ComboBoxItem Content="{DynamicResource Text.SoundRepeatThreeMinutes}" Tag="{x:Static effects:NotificationSoundRepeat.ThreeMinutes}" />
+            <ComboBoxItem Content="{DynamicResource Text.SoundRepeatFiveMinutes}" Tag="{x:Static effects:NotificationSoundRepeat.FiveMinutes}" />
+            <ComboBoxItem Content="{DynamicResource Text.SoundRepeatTenMinutes}" Tag="{x:Static effects:NotificationSoundRepeat.TenMinutes}" />
+        </ComboBox>
+        <local:GoogleConnectionPanel Grid.Row="12" Grid.RowSpan="5" x:Name="GooglePanel" Visibility="Collapsed" />
+        <TextBlock Grid.Row="12" x:Name="IcalHeading" Text="{DynamicResource Text.GoogleCalendars}" FontSize="14" />
+        <ItemsControl Grid.Row="14" x:Name="CalendarList"
                       ItemsSource="{Binding CalendarSubscriptions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type calendars:IcalCalendarSubscription}">
@@ -91,7 +108,7 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <Grid Grid.Row="12" x:Name="IcalButtons">
+        <Grid Grid.Row="16" x:Name="IcalButtons">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="8" />
@@ -113,7 +130,7 @@
                     Style="{StaticResource Style.CloseButton}"
                     AutomationProperties.AutomationId="AddCalendar" />
         </Grid>
-        <Button Grid.Row="14" x:Name="TestNotificationButton" HorizontalAlignment="Right"
+        <Button Grid.Row="18" x:Name="TestNotificationButton" HorizontalAlignment="Right"
                 Content="{DynamicResource Text.TestNotification}" Click="TestNotificationClick"
                 Style="{StaticResource Style.CloseButton}"
                 AutomationProperties.AutomationId="TestNotification" />

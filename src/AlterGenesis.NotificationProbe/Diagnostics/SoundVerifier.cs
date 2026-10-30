@@ -27,7 +27,7 @@ internal static class SoundVerifier
             }
         }
 
-        Check("New settings default to Koron without creating a file", () =>
+        Check("New settings default to Koron and no repeat without creating a file", () =>
         {
             var store = new AppSettingsStore(Path.Combine(fixtures, "new"));
             Require(store.Load() == AppSettings.Default && !File.Exists(store.FilePath));
@@ -44,12 +44,24 @@ internal static class SoundVerifier
             }
             Require(Directory.GetFiles(directory).Length == 1);
         });
+        Check("All five repeat choices survive save and reopen", () =>
+        {
+            var directory = Path.Combine(fixtures, "repeat-roundtrip");
+            foreach (var repeat in Enum.GetValues<NotificationSoundRepeat>())
+            {
+                var settings = AppSettings.Default with { SoundRepeat = repeat };
+                Require(new AppSettingsStore(directory).TrySave(settings));
+                Require(new AppSettingsStore(directory).Load() == settings);
+            }
+        });
         var invalidCases = new[] { "{broken", "null", "{}",
             "{\"Version\":2,\"Sound\":\"Koron\"}",
             "{\"Version\":1,\"Sound\":\"Unknown\"}",
             "{\"Version\":1,\"Sound\":99}",
             "{\"Version\":1,\"Sound\":\"Koron\",\"CardSize\":\"Unknown\"}",
-            "{\"Version\":1,\"Sound\":\"Koron\",\"CardSize\":99}" };
+            "{\"Version\":1,\"Sound\":\"Koron\",\"CardSize\":99}",
+            "{\"Version\":1,\"Sound\":\"Koron\",\"SoundRepeat\":\"Unknown\"}",
+            "{\"Version\":1,\"Sound\":\"Koron\",\"SoundRepeat\":99}" };
         for (var index = 0; index < invalidCases.Length; index++)
         {
             var caseIndex = index;
@@ -82,7 +94,8 @@ internal static class SoundVerifier
             const string original = "{\"Version\":1,\"Sound\":\"Pikon\"}";
             File.WriteAllText(store.FilePath, original);
             var settings = store.Load();
-            Require(settings.Sound == NotificationSound.Pikon && settings.CardSize == NotificationCardSize.Large);
+            Require(settings.Sound == NotificationSound.Pikon && settings.CardSize == NotificationCardSize.Large
+                && settings.SoundRepeat == NotificationSoundRepeat.None);
             Require(File.ReadAllText(store.FilePath) == original);
             Require(store.TrySave(settings with { CardSize = NotificationCardSize.Small }));
             Require(new AppSettingsStore(directory).Load() == (settings with { CardSize = NotificationCardSize.Small }));
@@ -136,6 +149,66 @@ internal static class SoundVerifier
             player.Throw = true;
             effect.OnNotificationPresentedAsync(notifications).GetAwaiter().GetResult();
             Require(player.Requests == 2 && notifications.Count == 3);
+        });
+        Check("Visible notifications repeat once per interval and stop when all are acknowledged", () =>
+        {
+            var now = DateTimeOffset.Parse("2026-10-30T01:00:00Z");
+            var settings = AppSettings.Default with { Sound = NotificationSound.Koron,
+                SoundRepeat = NotificationSoundRepeat.OneMinute };
+            var player = new RecordingPlayer();
+            var repeat = new RepeatingSoundController(player, () => settings, () => now);
+            repeat.Update(hasVisibleNotifications: true);
+            Require(repeat.IsActive && repeat.NextDueUtc == now.AddMinutes(1));
+            now = now.AddSeconds(59);
+            repeat.Tick(hasVisibleNotifications: true);
+            Require(player.Requests == 0);
+            now = now.AddSeconds(1);
+            repeat.Tick(hasVisibleNotifications: true);
+            repeat.Tick(hasVisibleNotifications: true);
+            Require(player.Requests == 1 && player.LastSound == NotificationSound.Koron
+                && repeat.NextDueUtc == now.AddMinutes(1));
+            repeat.Update(hasVisibleNotifications: false);
+            now = now.AddMinutes(2);
+            repeat.Tick(hasVisibleNotifications: false);
+            Require(!repeat.IsActive && player.Requests == 1);
+        });
+        Check("A new notification resets the repeat countdown without playing immediately", () =>
+        {
+            var now = DateTimeOffset.Parse("2026-10-30T01:00:00Z");
+            var settings = AppSettings.Default with { SoundRepeat = NotificationSoundRepeat.ThreeMinutes };
+            var player = new RecordingPlayer();
+            var repeat = new RepeatingSoundController(player, () => settings, () => now);
+            repeat.Update(true);
+            now = now.AddMinutes(2);
+            repeat.Update(true, resetCountdown: true);
+            Require(player.Requests == 0 && repeat.NextDueUtc == now.AddMinutes(3));
+            now = now.AddMinutes(3);
+            repeat.Tick(true);
+            Require(player.Requests == 1);
+        });
+        Check("Off, silent sound and preview-only use never start repeating", () =>
+        {
+            var now = DateTimeOffset.Parse("2026-10-30T01:00:00Z");
+            var settings = AppSettings.Default;
+            var player = new RecordingPlayer();
+            var repeat = new RepeatingSoundController(player, () => settings, () => now);
+            repeat.Update(true);
+            Require(!repeat.IsActive);
+            settings = settings with { SoundRepeat = NotificationSoundRepeat.OneMinute,
+                Sound = NotificationSound.None };
+            repeat.Update(true, resetCountdown: true);
+            Require(!repeat.IsActive && player.Requests == 0);
+        });
+        Check("Late ticks and playback failures make one attempt then schedule the next interval", () =>
+        {
+            var now = DateTimeOffset.Parse("2026-10-30T01:00:00Z");
+            var settings = AppSettings.Default with { SoundRepeat = NotificationSoundRepeat.OneMinute };
+            var player = new RecordingPlayer { Throw = true };
+            var repeat = new RepeatingSoundController(player, () => settings, () => now);
+            repeat.Update(true);
+            now = now.AddMinutes(10);
+            repeat.Tick(true);
+            Require(player.Requests == 1 && repeat.NextDueUtc == now.AddMinutes(1));
         });
         File.WriteAllText(reportPath, JsonSerializer.Serialize(new { Passed = passed, Fixtures = fixtures, Checks = results },
             new JsonSerializerOptions { WriteIndented = true }));

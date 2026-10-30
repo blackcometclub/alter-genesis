@@ -7,10 +7,12 @@ using AlterGenesis.NotificationProbe.Models;
 namespace AlterGenesis.NotificationProbe.Settings;
 
 public sealed record AppSettings(int Version, NotificationSound Sound,
-    NotificationCardSize CardSize = NotificationCardSize.Large)
+    NotificationCardSize CardSize = NotificationCardSize.Large,
+    NotificationSoundRepeat SoundRepeat = NotificationSoundRepeat.None)
 {
-    // Missing CardSize in older settings retains the previous large layout.
-    public static AppSettings Default => new(1, NotificationSound.Koron, NotificationCardSize.Small);
+    // Missing CardSize keeps the old large layout; missing SoundRepeat keeps the old one-shot behavior.
+    public static AppSettings Default => new(1, NotificationSound.Koron,
+        NotificationCardSize.Small, NotificationSoundRepeat.None);
 }
 
 public sealed class AppSettingsStore(string directory)
@@ -29,7 +31,8 @@ public sealed class AppSettingsStore(string directory)
         try
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions);
-            if (settings is not { Version: 1 } || !Enum.IsDefined(settings.Sound) || !Enum.IsDefined(settings.CardSize))
+            if (settings is not { Version: 1 } || !Enum.IsDefined(settings.Sound)
+                || !Enum.IsDefined(settings.CardSize) || !Enum.IsDefined(settings.SoundRepeat))
                 throw new InvalidDataException("Unsupported sound settings.");
             return settings;
         }
@@ -47,7 +50,8 @@ public sealed class AppSettingsStore(string directory)
 
     public bool TrySave(AppSettings settings)
     {
-        if (LoadFailed || settings.Version != 1 || !Enum.IsDefined(settings.Sound) || !Enum.IsDefined(settings.CardSize))
+        if (LoadFailed || settings.Version != 1 || !Enum.IsDefined(settings.Sound)
+            || !Enum.IsDefined(settings.CardSize) || !Enum.IsDefined(settings.SoundRepeat))
             return false;
         var temporaryPath = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
