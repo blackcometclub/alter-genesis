@@ -118,12 +118,33 @@ internal static class GoogleNotificationVerifier
             Require(!schedule.TryReplaceCalendarSchedules([], sources) && !schedule.TryKeepCalendarSources(new HashSet<string>()));
             Require(schedule.Items.SequenceEqual(before));
         });
-        await CheckValue("Email-only and all-day events never become invented popup times", () =>
+        await CheckValue("Email-only timed events do not become popup reminders", () =>
         {
             var item = Event(); item.Reminders.Overrides = [new() { Method = "email", Minutes = 2 }];
             Require(Make(item).Count == 0);
-            item = Event(2); item.Start = new() { Date = "2026-10-29" };
-            Require(Make(item).Count == 0);
+        });
+        await CheckValue("All-day events notify once at 09:00 local without reminder settings", () =>
+        {
+            var item = Event();
+            item.Start = new() { Date = "2026-10-30" };
+            item.Reminders = new() { UseDefault = false, Overrides = [] };
+            var japan = TimeZoneInfo.CreateCustomTimeZone("Fixture-JST", TimeSpan.FromHours(9), "Fixture-JST", "Fixture-JST");
+            var scheduled = GoogleNotificationReader.Create(calendar, item, null, now, [], japan,
+                "Untitled", "All day").Single();
+            Require(scheduled.DueAtUtc == DateTimeOffset.Parse("2026-10-30T00:00:00Z")
+                && scheduled.Item.StartTime == "All day");
+            var repeated = GoogleNotificationReader.Create(calendar, item, null, now, [], japan,
+                "Untitled", "All day").Single();
+            Require(repeated.Item.Id == scheduled.Item.Id);
+            item.Status = "cancelled";
+            Require(GoogleNotificationReader.Create(calendar, item, null, now, [], japan,
+                "Untitled", "All day").Count == 0);
+        });
+        await CheckValue("Past same-day all-day events are not introduced late", () =>
+        {
+            var item = Event(); item.Start = new() { Date = "2026-10-29" };
+            Require(GoogleNotificationReader.Create(calendar, item, null, now.AddMinutes(1), [],
+                TimeZoneInfo.Utc, "Untitled", "All day").Count == 0);
         });
         await CheckValue("Corrupt reminder data fails rather than removing existing reservations", () =>
         {

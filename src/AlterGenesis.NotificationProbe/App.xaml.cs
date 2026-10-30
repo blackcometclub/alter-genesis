@@ -160,7 +160,8 @@ public partial class App : Application
         if (_useGoogle)
         {
             _googleSession = new GoogleNotificationSession(new GoogleCalendarConnection(directory), _schedule,
-                SynchronizeNotifications, () => (string)FindResource("Text.UntitledEvent"));
+                SynchronizeNotifications, () => (string)FindResource("Text.UntitledEvent"),
+                allDay: () => (string)FindResource("Text.AllDay"));
             _googlePeriodicRefresh = new GooglePeriodicRefresh();
             _googleSession.Changed += GoogleSessionChanged;
             if (ReadArgumentValue(e.Args, "--google-state-report") is { } stateReport

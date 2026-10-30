@@ -9,7 +9,8 @@ namespace AlterGenesis.NotificationProbe.Google;
 // One owner for startup and settings operations. UI closure does not dispose shared credentials.
 internal sealed class GoogleNotificationSession(IGoogleCalendarConnection connection,
     NotificationSchedule schedule, Action<IReadOnlyCollection<NotificationItem>> publish,
-    Func<string> untitled, Func<TimeSpan, CancellationToken, Task>? wait = null) : IDisposable
+    Func<string> untitled, Func<TimeSpan, CancellationToken, Task>? wait = null,
+    Func<string>? allDay = null) : IDisposable
 {
     private static readonly TimeSpan[] AccessDeniedRetryDelays =
         [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(15)];
@@ -98,11 +99,11 @@ internal sealed class GoogleNotificationSession(IGoogleCalendarConnection connec
         if (!schedule.TryKeepCalendarSources(sources)) throw new GoogleNotificationSaveException();
         publish([]);
         var read = await GoogleNotificationReader.ReadAsync(connection.Service, Snapshot, schedule.Items,
-            DateTimeOffset.UtcNow, TimeZoneInfo.Local, untitled(), token);
+            DateTimeOffset.UtcNow, TimeZoneInfo.Local, untitled(), token, allDay?.Invoke() ?? "All day");
         token.ThrowIfCancellationRequested();
         if (!schedule.TryReplaceCalendarSchedules(read.Items, sources)) throw new GoogleNotificationSaveException();
         ScheduleBlocked = false;
-        StatusKey = read.DeferredAllDay > 0 ? "Text.GoogleAllDayDeferred" : "Text.CalendarEventsRefreshSucceeded";
+        StatusKey = "Text.CalendarEventsRefreshSucceeded";
     }
 
     private async Task RunAsync(Func<CancellationToken, Task> work, bool authorization = false)

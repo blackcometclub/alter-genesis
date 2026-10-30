@@ -14,7 +14,7 @@ using CalendarEvent = Google.Apis.Calendar.v3.Data.Event;
 
 namespace AlterGenesis.NotificationProbe.Google;
 
-internal sealed record GoogleNotificationRead(IReadOnlyList<ScheduledNotification> Items, int DeferredAllDay);
+internal sealed record GoogleNotificationRead(IReadOnlyList<ScheduledNotification> Items);
 
 internal static class GoogleNotificationReader
 {
@@ -23,10 +23,10 @@ internal static class GoogleNotificationReader
 
     internal static async Task<GoogleNotificationRead> ReadAsync(CalendarService service,
         GoogleCalendarSnapshot snapshot, IReadOnlyList<SavedNotification> previous,
-        DateTimeOffset now, TimeZoneInfo zone, string untitled, CancellationToken cancellationToken)
+        DateTimeOffset now, TimeZoneInfo zone, string untitled, CancellationToken cancellationToken,
+        string allDay = "All day")
     {
         var output = new List<ScheduledNotification>();
-        var allDay = 0;
         // Keep due reminders already waiting on disk, including a short offline interval.
         var from = previous.Where(item => item.Status == NotificationStatus.Scheduled)
             .Select(item => item.DueAtUtc!.Value).Append(now).Min();
@@ -55,8 +55,7 @@ internal static class GoogleNotificationReader
                 {
                     if (string.IsNullOrWhiteSpace(item.Id) || !eventIds.Add(item.Id))
                         throw new InvalidDataException("Missing or repeated event identity.");
-                    if (!string.IsNullOrEmpty(item.Start?.Date)) allDay++;
-                    output.AddRange(Create(calendar, item, defaults, now, previous, zone, untitled));
+                    output.AddRange(Create(calendar, item, defaults, now, previous, zone, untitled, allDay));
                 }
                 page = response.NextPageToken;
                 if (eventIds.Count > 10000 || pages.Count >= 100
@@ -64,19 +63,16 @@ internal static class GoogleNotificationReader
                     throw new InvalidDataException("Event page limit exceeded.");
             } while (!string.IsNullOrEmpty(page));
         }
-        return new(output.OrderBy(item => item.DueAtUtc).ThenBy(item => item.Item.Id, StringComparer.Ordinal).ToArray(), allDay);
+        return new(output.OrderBy(item => item.DueAtUtc).ThenBy(item => item.Item.Id, StringComparer.Ordinal).ToArray());
     }
 
     internal static IReadOnlyList<ScheduledNotification> Create(GoogleCalendarDescriptor calendar,
         CalendarEvent item, IList<EventReminder>? defaults, DateTimeOffset now,
-        IReadOnlyList<SavedNotification> previous, TimeZoneInfo zone, string untitled)
+        IReadOnlyList<SavedNotification> previous, TimeZoneInfo zone, string untitled,
+        string allDay = "All day")
     {
-        var calculation = ReminderCalculation.From(item, defaults);
-        if (calculation.Outcome is "InvalidStart" or "InvalidReminderSettings" or "MissingReminderSettings")
-            throw new InvalidDataException("Cannot safely interpret event reminders.");
-        if (calculation.PopupReminders.Length == 0) return [];
+        if (item.Status == "cancelled") return [];
         if (string.IsNullOrWhiteSpace(item.Id)) throw new InvalidDataException("Missing event identity.");
-        var start = calculation.StartAtUtc!.Value;
         var source = SourceId(calendar.Id);
         var title = (item.Summary ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
         if (title.Length == 0) title = untitled;
@@ -88,6 +84,25 @@ internal static class GoogleNotificationReader
             ? link : new Uri("https://calendar.google.com/calendar/u/0/r");
         var existing = previous.Where(value => value.Status == NotificationStatus.Scheduled)
             .Select(value => value.Id).ToHashSet(StringComparer.Ordinal);
+
+        if (!string.IsNullOrEmpty(item.Start?.Date))
+        {
+            if (!DateOnly.TryParseExact(item.Start.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var date))
+                throw new InvalidDataException("Cannot safely interpret all-day event date.");
+            var due = AtLocalTime(date, new TimeOnly(9, 0), zone);
+            var id = "google-" + Hash(JsonSerializer.Serialize(new[] { source, item.Id,
+                date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "all-day-09:00" }));
+            var scheduled = new ScheduledNotification(new NotificationItem(allDay, title, brush, eventUri)
+                { Id = id }, due, source);
+            return due < now.AddDays(30) && (due >= now || existing.Contains(id)) ? [scheduled] : [];
+        }
+
+        var calculation = ReminderCalculation.From(item, defaults);
+        if (calculation.Outcome is "InvalidStart" or "InvalidReminderSettings" or "MissingReminderSettings")
+            throw new InvalidDataException("Cannot safely interpret event reminders.");
+        if (calculation.PopupReminders.Length == 0) return [];
+        var start = calculation.StartAtUtc!.Value;
         return calculation.PopupReminders.Select(reminder =>
         {
             var id = "google-" + Hash(JsonSerializer.Serialize(new[] { source, item.Id,
@@ -97,5 +112,12 @@ internal static class GoogleNotificationReader
                 { Id = id }, reminder.DueAtUtc, source);
         }).Where(value => value.DueAtUtc < now.AddDays(30)
             && (value.DueAtUtc >= now || existing.Contains(value.Item.Id))).ToArray();
+    }
+
+    private static DateTimeOffset AtLocalTime(DateOnly date, TimeOnly time, TimeZoneInfo zone)
+    {
+        var local = date.ToDateTime(time, DateTimeKind.Unspecified);
+        if (zone.IsInvalidTime(local)) throw new InvalidDataException("Invalid local all-day notification time.");
+        return new DateTimeOffset(local, zone.GetUtcOffset(local)).ToUniversalTime();
     }
 }

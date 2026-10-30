@@ -72,7 +72,6 @@
     <system:String x:Key="Text.NotificationsUnreadable">Notification data could not be read. The original file has not been changed.</system:String>
     <system:String x:Key="Text.NotificationsSaveFailed">The notification change could not be saved. The notification will remain visible.</system:String>
     <system:String x:Key="Text.ReminderSaveFailed">The reminder could not be saved. Its reservation will be kept and retried.</system:String>
-    <system:String x:Key="Text.GoogleAllDayDeferred">Refreshed. All-day reminders are not supported yet.</system:String>
     <system:String x:Key="Text.GoogleAuthorizing">Sign in using your browser</system:String>
     <system:String x:Key="Text.GoogleCalendar">Google Calendar</system:String>
     <system:String x:Key="Text.GoogleCancel">Cancel</system:String>
