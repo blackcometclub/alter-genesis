@@ -37,6 +37,7 @@ public partial class App : Application
     private string? _runtimeReport;
     private bool _useGoogle;
     private GoogleNotificationSession? _googleSession;
+    private GooglePeriodicRefresh? _googlePeriodicRefresh;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -160,6 +161,8 @@ public partial class App : Application
         {
             _googleSession = new GoogleNotificationSession(new GoogleCalendarConnection(directory), _schedule,
                 SynchronizeNotifications, () => (string)FindResource("Text.UntitledEvent"));
+            _googlePeriodicRefresh = new GooglePeriodicRefresh();
+            _googleSession.Changed += GoogleSessionChanged;
             if (ReadArgumentValue(e.Args, "--google-state-report") is { } stateReport
                 && ReadArgumentValue(e.Args, "--data-dir") is not null)
                 _googleSession.Changed += () => WriteGoogleStateReport(stateReport);
@@ -331,13 +334,33 @@ public partial class App : Application
         ReleaseDueNotifications();
         if (_schedule is null || _soundRepeater is null || _exiting) return;
         _soundRepeater.Tick(_schedule.Visible.Count > 0);
+        if (_googleSession is not null && _googlePeriodicRefresh?.TryTakeDue(
+                _googleSession.Connected, _googleSession.Busy) == true)
+            _ = RefreshGooglePeriodicallyAsync();
+        UpdateReminderTimer();
+    }
+
+    private void GoogleSessionChanged()
+    {
+        if (_googleSession is null || _googlePeriodicRefresh is null || _exiting) return;
+        _googlePeriodicRefresh.Update(_googleSession.Connected, _googleSession.Busy);
+        UpdateReminderTimer();
+    }
+
+    private async Task RefreshGooglePeriodicallyAsync()
+    {
+        if (_googleSession is null || _googlePeriodicRefresh is null || _exiting) return;
+        await _googleSession.RefreshAsync();
+        if (_exiting) return;
+        _googlePeriodicRefresh.Update(_googleSession.Connected, _googleSession.Busy);
         UpdateReminderTimer();
     }
 
     private void UpdateReminderTimer()
     {
         if (_reminderTimer is not null && _schedule is not null && _soundRepeater is not null)
-            _reminderTimer.IsEnabled = _schedule.HasPending || _soundRepeater.IsActive;
+            _reminderTimer.IsEnabled = _schedule.HasPending || _soundRepeater.IsActive
+                || _googlePeriodicRefresh?.IsActive == true;
     }
 
     private void SynchronizeNotifications(IReadOnlyCollection<NotificationItem> presented)
@@ -455,6 +478,7 @@ public partial class App : Application
         _tray?.Dispose();
         _player?.Dispose();
         _icalClient.Dispose();
+        if (_googleSession is not null) _googleSession.Changed -= GoogleSessionChanged;
         _googleSession?.Dispose();
         _calendarSyncCancellation.Dispose();
         if (_instanceMutex is not null)

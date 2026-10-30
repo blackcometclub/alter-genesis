@@ -225,6 +225,37 @@ internal static class GoogleNotificationVerifier
                 && waits.SequenceEqual(new[] { TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10) })
                 && session.StatusKey == "Text.CalendarEventsRefreshSucceeded");
         });
+        await CheckValue("Periodic refresh waits five minutes after completion and never overlaps", () =>
+        {
+            var cadenceNow = DateTimeOffset.Parse("2026-10-30T01:00:00Z");
+            var cadence = new GooglePeriodicRefresh(() => cadenceNow);
+            cadence.Update(connected: true, busy: false);
+            Require(cadence.IsActive && cadence.NextDueUtc == cadenceNow.AddMinutes(5));
+            cadenceNow = cadenceNow.AddMinutes(5).AddTicks(-1);
+            Require(!cadence.TryTakeDue(connected: true, busy: false));
+            cadenceNow = cadenceNow.AddTicks(1);
+            Require(cadence.TryTakeDue(connected: true, busy: false) && cadence.IsActive
+                && cadence.NextDueUtc is null);
+            Require(!cadence.TryTakeDue(connected: true, busy: true));
+            cadence.Update(connected: true, busy: false);
+            Require(cadence.NextDueUtc == cadenceNow.AddMinutes(5));
+        });
+        await CheckValue("Manual work resets periodic cadence and disconnect stops it", () =>
+        {
+            var cadenceNow = DateTimeOffset.Parse("2026-10-30T02:00:00Z");
+            var cadence = new GooglePeriodicRefresh(() => cadenceNow, TimeSpan.FromMinutes(5));
+            cadence.Update(connected: true, busy: false);
+            cadenceNow = cadenceNow.AddMinutes(4);
+            cadence.Update(connected: true, busy: true);
+            cadenceNow = cadenceNow.AddMinutes(1);
+            cadence.Update(connected: true, busy: false);
+            Require(cadence.NextDueUtc == cadenceNow.AddMinutes(5));
+            cadenceNow = cadenceNow.AddMinutes(5);
+            Require(cadence.TryTakeDue(connected: true, busy: false));
+            cadence.Update(connected: false, busy: false);
+            Require(!cadence.IsActive && cadence.NextDueUtc is null
+                && !cadence.TryTakeDue(connected: false, busy: false));
+        });
         await Check("Selection removal with failed notification persistence blocks old timers until a successful retry", async () =>
         {
             using var service = Service(new FakeHandler([]));
