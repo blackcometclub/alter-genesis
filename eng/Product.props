@@ -1,0 +1,23 @@
+<Project>
+  <PropertyGroup>
+    <AlterGenesisProductName>ALTER GENESIS</AlterGenesisProductName>
+    <AlterGenesisExecutableName>AlterGenesis</AlterGenesisExecutableName>
+    <AlterGenesisPublisher>TINMOON</AlterGenesisPublisher>
+    <AlterGenesisVersion>0.1.0</AlterGenesisVersion>
+    <AlterGenesisPackageVersion>0.1.0.0</AlterGenesisPackageVersion>
+
+    <AssemblyName>$(AlterGenesisExecutableName)</AssemblyName>
+    <Product>$(AlterGenesisProductName)</Product>
+    <Title>$(AlterGenesisProductName)</Title>
+    <Company>$(AlterGenesisPublisher)</Company>
+    <Authors>$(AlterGenesisPublisher)</Authors>
+    <Description>Google Calendar reminder cards for Windows.</Description>
+    <Version>$(AlterGenesisVersion)</Version>
+    <FileVersion>$(AlterGenesisPackageVersion)</FileVersion>
+    <AssemblyVersion>$(AlterGenesisPackageVersion)</AssemblyVersion>
+    <InformationalVersion>$(AlterGenesisVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <NeutralLanguage>en</NeutralLanguage>
+    <SatelliteResourceLanguages>en;ja</SatelliteResourceLanguages>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">ALTER GENESIS app icon concept B, Alter Gate</title>
+  <g id="symbol" fill="#111111">
+    <path d="M48 32H80V224H48C34.7 224 24 213.3 24 200V56C24 42.7 34.7 32 48 32Z"/>
+    <path d="M80 32H124L232 224H176L80 54V32Z"/>
+    <path d="M64 140H174V180H64V140Z"/>
+  </g>
+  <path fill="#FFFFFF" d="M112 140H128V180H112V140Z"/>
+</svg>

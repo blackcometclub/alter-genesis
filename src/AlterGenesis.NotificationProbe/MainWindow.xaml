@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="ALTER GENESIS — Notification Probe"
+        Title="ALTER GENESIS"
         SizeToContent="Height"
         MaxHeight="{DynamicResource Card.MaxWindowHeight}"
         WindowStyle="None"
