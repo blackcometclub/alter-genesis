@@ -22,55 +22,84 @@ internal static class StartupRegistrationVerifier
         }
 
         var executable = Path.Combine(Path.GetTempPath(), "ALTER GENESIS test", "AlterGenesis.NotificationProbe.exe");
-        var expected = $"\"{Path.GetFullPath(executable)}\" --startup";
-        Check("Startup command quotes the full executable path", () =>
-            Require(StartupRegistration.BuildCommand(executable) == expected));
-        Check("Explicit data directory is normalized and quoted for Windows startup", () =>
+        var expected = new StartupEntry(
+            Path.GetFullPath(executable),
+            "--startup",
+            Path.GetDirectoryName(Path.GetFullPath(executable))!);
+        Check("Startup shortcut targets the full executable path", () =>
+            Require(StartupRegistration.BuildEntry(executable) == expected));
+        Check("Explicit data directory is normalized and quoted in shortcut arguments", () =>
         {
             var dataDirectory = Path.Combine(Path.GetTempPath(), "ALTER GENESIS data", "live");
-            var command = StartupRegistration.BuildCommand(executable, dataDirectory);
-            Require(command == $"{expected} \"--data-dir={Path.GetFullPath(dataDirectory)}\"");
+            var entry = StartupRegistration.BuildEntry(executable, dataDirectory);
+            Require(entry == expected with
+            {
+                Arguments = $"--startup \"--data-dir={Path.GetFullPath(dataDirectory)}\""
+            });
         });
 
-        Check("Missing registration is disabled", () =>
+        Check("Missing shortcut is disabled", () =>
         {
-            var registration = new StartupRegistration(new MemoryValueStore(), executable);
+            var registration = new StartupRegistration(new MemoryEntryStore(), executable);
             Require(registration.TryGetEnabled(out var enabled) && !enabled);
         });
-        Check("Enable writes only the current executable command", () =>
+        Check("Enable writes only the current executable shortcut", () =>
         {
-            var store = new MemoryValueStore();
+            var store = new MemoryEntryStore();
             var registration = new StartupRegistration(store, executable);
             Require(registration.TrySetEnabled(true) && store.Value == expected);
             Require(registration.TryGetEnabled(out var enabled) && enabled);
         });
-        Check("A moved executable is disabled until it replaces the old command", () =>
+        Check("A moved executable is disabled until it replaces the old shortcut", () =>
         {
-            var store = new MemoryValueStore { Value = "\"C:\\Old\\AlterGenesis.NotificationProbe.exe\" --startup" };
+            var store = new MemoryEntryStore
+            {
+                Value = new StartupEntry("C:\\Old\\AlterGenesis.NotificationProbe.exe", "--startup", "C:\\Old")
+            };
             var registration = new StartupRegistration(store, executable);
             Require(registration.TryGetEnabled(out var enabled) && !enabled);
             Require(registration.TrySetEnabled(true) && store.Value == expected);
         });
-        Check("Disable removes the application registration", () =>
+        Check("Disable removes the application shortcut", () =>
         {
-            var store = new MemoryValueStore { Value = expected };
+            var store = new MemoryEntryStore { Value = expected };
             var registration = new StartupRegistration(store, executable);
             Require(registration.TrySetEnabled(false) && store.Value is null && store.Deletes == 1);
         });
-        Check("Read failure is reported without changing the registration", () =>
+        Check("Read failure is reported without changing the shortcut", () =>
         {
-            var store = new MemoryValueStore { Value = expected, FailRead = true };
+            var store = new MemoryEntryStore { Value = expected, FailRead = true };
             var registration = new StartupRegistration(store, executable);
             Require(!registration.TryGetEnabled(out var enabled) && !enabled && store.Value == expected);
         });
-        Check("Write and delete failures are reported without changing the registration", () =>
+        Check("Write and delete failures are reported without changing the shortcut", () =>
         {
-            var store = new MemoryValueStore { Value = expected, FailWrite = true };
+            var store = new MemoryEntryStore { Value = expected, FailWrite = true };
             var registration = new StartupRegistration(store, executable);
             Require(!registration.TrySetEnabled(true) && store.Value == expected);
             store.FailWrite = false;
             store.FailDelete = true;
             Require(!registration.TrySetEnabled(false) && store.Value == expected);
+        });
+        Check("Windows shortcut can be written, read and removed in an isolated folder", () =>
+        {
+            var reportDirectory = Path.GetDirectoryName(Path.GetFullPath(reportPath))
+                ?? throw new IOException("The startup verification folder is unavailable.");
+            var directory = Path.Combine(reportDirectory, $".startup-shortcut-{Guid.NewGuid():N}");
+            var shortcutPath = Path.Combine(directory, ShortcutStartupEntryStore.ShortcutFileName);
+            var store = new ShortcutStartupEntryStore(shortcutPath);
+            try
+            {
+                store.Write(expected);
+                Require(File.Exists(shortcutPath));
+                Require(store.Read() == expected);
+                store.Delete();
+                Require(!File.Exists(shortcutPath));
+            }
+            finally
+            {
+                if (Directory.Exists(directory)) Directory.Delete(directory, true);
+            }
         });
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
@@ -81,27 +110,27 @@ internal static class StartupRegistrationVerifier
 
     private static void Require(bool condition)
     {
-        if (!condition) throw new InvalidOperationException("Startup registration verification failed.");
+        if (!condition) throw new InvalidOperationException("Startup shortcut verification failed.");
     }
 
-    private sealed class MemoryValueStore : IStartupValueStore
+    private sealed class MemoryEntryStore : IStartupEntryStore
     {
-        internal string? Value { get; set; }
+        internal StartupEntry? Value { get; set; }
         internal int Deletes { get; private set; }
         internal bool FailRead { get; set; }
         internal bool FailWrite { get; set; }
         internal bool FailDelete { get; set; }
 
-        public string? Read()
+        public StartupEntry? Read()
         {
             if (FailRead) throw new IOException("read");
             return Value;
         }
 
-        public void Write(string command)
+        public void Write(StartupEntry entry)
         {
             if (FailWrite) throw new UnauthorizedAccessException("write");
-            Value = command;
+            Value = entry;
         }
 
         public void Delete()
