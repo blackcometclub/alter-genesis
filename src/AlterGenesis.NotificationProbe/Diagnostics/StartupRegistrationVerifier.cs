@@ -25,6 +25,12 @@ internal static class StartupRegistrationVerifier
         var expected = $"\"{Path.GetFullPath(executable)}\" --startup";
         Check("Startup command quotes the full executable path", () =>
             Require(StartupRegistration.BuildCommand(executable) == expected));
+        Check("Explicit data directory is normalized and quoted for Windows startup", () =>
+        {
+            var dataDirectory = Path.Combine(Path.GetTempPath(), "ALTER GENESIS data", "live");
+            var command = StartupRegistration.BuildCommand(executable, dataDirectory);
+            Require(command == $"{expected} \"--data-dir={Path.GetFullPath(dataDirectory)}\"");
+        });
 
         Check("Missing registration is disabled", () =>
         {

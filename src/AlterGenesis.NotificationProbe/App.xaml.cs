@@ -110,7 +110,8 @@ public partial class App : Application
             return; // Layout inspection is deliberately silent and does not read user settings.
         }
 
-        var directory = ReadArgumentValue(e.Args, "--data-dir") ?? Path.Combine(
+        var explicitDataDirectory = ReadArgumentValue(e.Args, "--data-dir");
+        var directory = explicitDataDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "TINMOON", "AlterGenesis.NotificationProbe");
         foreach (var option in new[] { "--settings-layout-report", "--runtime-report", "--google-state-report", "--google-settings-report" })
@@ -121,7 +122,8 @@ public partial class App : Application
             }
         _store = new AppSettingsStore(directory);
         _calendarStore = new IcalCalendarStore(directory);
-        _startupRegistration = StartupRegistration.ForCurrentProcess();
+        _startupRegistration = StartupRegistration.ForCurrentProcess(
+            explicitDataDirectory is null ? null : Path.GetFullPath(directory));
         var identity = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar).ToUpperInvariant();
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
         _instanceMutex = new Mutex(false, @"Local\TINMOON.AlterGenesis.NotificationProbe." + key);

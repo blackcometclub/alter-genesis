@@ -17,14 +17,15 @@ internal interface IStartupValueStore
     void Delete();
 }
 
-internal sealed class StartupRegistration(IStartupValueStore store, string executablePath) : IStartupRegistration
+internal sealed class StartupRegistration(IStartupValueStore store, string executablePath,
+    string? dataDirectory = null) : IStartupRegistration
 {
-    private readonly string _command = BuildCommand(executablePath);
+    private readonly string _command = BuildCommand(executablePath, dataDirectory);
 
-    internal static IStartupRegistration ForCurrentProcess() =>
+    internal static IStartupRegistration ForCurrentProcess(string? dataDirectory = null) =>
         string.IsNullOrWhiteSpace(Environment.ProcessPath)
             ? new UnavailableStartupRegistration()
-            : new StartupRegistration(new RegistryStartupValueStore(), Environment.ProcessPath);
+            : new StartupRegistration(new RegistryStartupValueStore(), Environment.ProcessPath, dataDirectory);
 
     public bool TryGetEnabled(out bool enabled)
     {
@@ -54,8 +55,13 @@ internal sealed class StartupRegistration(IStartupValueStore store, string execu
         }
     }
 
-    internal static string BuildCommand(string executablePath) =>
-        $"\"{Path.GetFullPath(executablePath)}\" --startup";
+    internal static string BuildCommand(string executablePath, string? dataDirectory = null)
+    {
+        var command = $"\"{Path.GetFullPath(executablePath)}\" --startup";
+        return string.IsNullOrWhiteSpace(dataDirectory)
+            ? command
+            : $"{command} \"--data-dir={Path.GetFullPath(dataDirectory)}\"";
+    }
 
     private static bool IsRegistrationFailure(Exception exception) =>
         exception is IOException or UnauthorizedAccessException or SecurityException;
