@@ -12,12 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "断罪の刻印祭壇 - ALTER GENESIS",
-        "width": 1040,
-        "height": 720,
-        "minWidth": 900,
-        "minHeight": 640,
-        "resizable": true
+        "title": "設定 — ALTER GENESIS",
+        "width": 408,
+        "height": 392,
+        "resizable": false
       }
     ],
     "security": {
