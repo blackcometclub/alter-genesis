@@ -10,6 +10,13 @@
     { id: "work", name: "仕事", color: "#556b8d", detail: "会議・業務予定" },
   ];
 
+  const setupSteps = [
+    { step: 1, label: "Google接続" },
+    { step: 2, label: "カレンダー" },
+    { step: 3, label: "通知テスト" },
+    { step: 4, label: "完了" },
+  ];
+
   let isPanel = $state(false);
   let connectionState = $state<ConnectionState>("idle");
   let selectedCalendars = $state<string[]>(["important"]);
@@ -58,8 +65,11 @@
   }
 </script>
 
+<svelte:head>
+  <title>{isPanel ? "刻限通知 - ALTER GENESIS" : "断罪の刻印祭壇 - ALTER GENESIS"}</title>
+</svelte:head>
+
 {#if isPanel}
-  <svelte:head><title>刻限通知 - ALTER GENESIS</title></svelte:head>
   <main class="panel-page">
     <section class="notification-panel" aria-label="テスト通知">
       <div class="panel-sigil" aria-hidden="true"><span></span></div>
@@ -79,7 +89,6 @@
     </section>
   </main>
 {:else}
-  <svelte:head><title>断罪の刻印祭壇 - ALTER GENESIS</title></svelte:head>
   <main class="app-shell">
     <aside class="sidebar">
       <div class="brand-mark" aria-hidden="true"><span></span></div>
@@ -90,9 +99,9 @@
       </div>
 
       <nav aria-label="初回設定の進行">
-        {#each [[1, "Google接続"], [2, "カレンダー"], [3, "通知テスト"], [4, "完了"]] as item}
-          <div class:active={setupStep === item[0]} class:done={setupStep > item[0]} class="nav-step">
-            <span class="step-number">{setupStep > item[0] ? "✓" : item[0]}</span><span>{item[1]}</span>
+        {#each setupSteps as item}
+          <div class:active={setupStep === item.step} class:done={setupStep > item.step} class="nav-step">
+            <span class="step-number">{setupStep > item.step ? "✓" : item.step}</span><span>{item.label}</span>
           </div>
         {/each}
       </nav>
@@ -135,7 +144,7 @@
         </div>
         <div class="timing-row">
           <label for="notification-offset">通知タイミング</label>
-          <select id="notification-offset" bind:value={notificationOffset} disabled={connectionState !== "mock">
+          <select id="notification-offset" bind:value={notificationOffset} disabled={connectionState !== "mock"}>
             <option value="0">開始時刻</option><option value="5">5分前</option><option value="10">10分前</option><option value="30">30分前</option><option value="60">1時間前</option>
           </select>
           <button class="test-button" type="button" onclick={openTestPanel} disabled={connectionState !== "mock" || selectedCalendars.length === 0}>テスト通知を開く</button>
