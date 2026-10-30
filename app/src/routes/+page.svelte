@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { browser } from "$app/environment";
+  import NotificationCard from "$lib/NotificationCard.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { onMount } from "svelte";
 
   type Language = "system" | "english" | "japanese";
   type CardSize = "small" | "large";
@@ -14,6 +16,14 @@
     card_size: CardSize;
     notification_sound: NotificationSound;
     sound_repeat: SoundRepeat;
+  };
+
+  type ActiveNotification = {
+    id: string;
+    start_time: string;
+    title: string;
+    calendar_color: string;
+    card_size: CardSize;
   };
 
   const defaults: AppSettings = {
@@ -30,6 +40,9 @@
       cardSize: "カードの大きさ",
       notificationSound: "通知音",
       soundRepeat: "音の繰り返し",
+      close: "閉じる",
+      notificationLoadError: "通知を表示できませんでした。",
+      notificationCloseError: "通知を閉じられませんでした。",
       languageOptions: { system: "システム", english: "英語", japanese: "日本語" },
       cardSizeOptions: { small: "小さめ", large: "大きめ" },
       soundOptions: { none: "なし", koron: "ころん", kirari: "きらり", pikon: "ぴこん" },
@@ -55,6 +68,9 @@
       cardSize: "Card size",
       notificationSound: "Notification sound",
       soundRepeat: "Repeat sound",
+      close: "Close",
+      notificationLoadError: "The notification could not be displayed.",
+      notificationCloseError: "The notification could not be closed.",
       languageOptions: { system: "System", english: "English", japanese: "Japanese" },
       cardSizeOptions: { small: "Small", large: "Large" },
       soundOptions: { none: "None", koron: "Koron", kirari: "Kirari", pikon: "Pikon" },
@@ -76,12 +92,18 @@
     },
   } as const;
 
+  const panelMode =
+    browser && "__TAURI_INTERNALS__" in window && getCurrentWindow().label === "notification-panel";
+
   let settings = $state<AppSettings>({ ...defaults });
   let systemLocale = $state<Locale>("ja");
   let loading = $state(true);
   let saving = $state(false);
   let blocked = $state(false);
   let errorCode = $state("");
+  let notification = $state<ActiveNotification | null>(null);
+  let notificationBusy = $state(false);
+  let notificationError = $state("");
 
   const locale = $derived<Locale>(
     settings.language === "japanese"
@@ -103,9 +125,21 @@
 
     try {
       settings = await invoke<AppSettings>("load_settings");
+      await applyLanguage();
+
+      if (panelMode) {
+        notification = await invoke<ActiveNotification | null>("load_notification");
+        if (!notification) {
+          await getCurrentWindow().close();
+        }
+      }
     } catch (error) {
-      blocked = true;
-      errorCode = normalizeError(error);
+      if (panelMode) {
+        notificationError = text.notificationLoadError;
+      } else {
+        blocked = true;
+        errorCode = normalizeError(error);
+      }
     } finally {
       loading = false;
       await applyLanguage();
@@ -133,6 +167,23 @@
     }
   }
 
+  async function dismissNotification() {
+    if (!notification || notificationBusy) {
+      return;
+    }
+
+    notificationBusy = true;
+    notificationError = "";
+
+    try {
+      await invoke("dismiss_notification", { id: notification.id });
+      await getCurrentWindow().close();
+    } catch {
+      notificationError = text.notificationCloseError;
+      notificationBusy = false;
+    }
+  }
+
   async function applyLanguage() {
     const activeLocale: Locale =
       settings.language === "japanese"
@@ -141,11 +192,12 @@
           ? "en"
           : systemLocale;
     const activeCopy = copy[activeLocale];
+    const activeTitle = panelMode ? "ALTER GENESIS" : activeCopy.title;
     document.documentElement.lang = activeLocale;
-    document.title = activeCopy.title;
+    document.title = activeTitle;
 
     try {
-      await getCurrentWindow().setTitle(activeCopy.title);
+      await getCurrentWindow().setTitle(activeTitle);
     } catch {
       // Browser preview does not provide a Tauri window.
     }
@@ -160,71 +212,89 @@
   <meta name="color-scheme" content="dark" />
 </svelte:head>
 
-<main aria-busy={loading || saving}>
-  <div class="settings">
-    <label>
-      <span>{text.language}</span>
-      <select
-        value={settings.language}
-        disabled={controlsDisabled}
-        onchange={(event) =>
-          changeSetting("language", event.currentTarget.value as Language)}
-      >
-        <option value="system">{text.languageOptions.system}</option>
-        <option value="english">{text.languageOptions.english}</option>
-        <option value="japanese">{text.languageOptions.japanese}</option>
-      </select>
-    </label>
+{#if panelMode}
+  <main class="notification-page" aria-busy={loading || notificationBusy}>
+    {#if notification}
+      <NotificationCard
+        {notification}
+        closeLabel={text.close}
+        busy={notificationBusy}
+        onDismiss={dismissNotification}
+      />
+    {:else if notificationError}
+      <div class="notification-error" role="alert">
+        <span>{notificationError}</span>
+        <button type="button" onclick={() => getCurrentWindow().close()}>{text.close}</button>
+      </div>
+    {/if}
+  </main>
+{:else}
+  <main class="settings-page" aria-busy={loading || saving}>
+    <div class="settings">
+      <label>
+        <span>{text.language}</span>
+        <select
+          value={settings.language}
+          disabled={controlsDisabled}
+          onchange={(event) =>
+            changeSetting("language", event.currentTarget.value as Language)}
+        >
+          <option value="system">{text.languageOptions.system}</option>
+          <option value="english">{text.languageOptions.english}</option>
+          <option value="japanese">{text.languageOptions.japanese}</option>
+        </select>
+      </label>
 
-    <label>
-      <span>{text.cardSize}</span>
-      <select
-        value={settings.card_size}
-        disabled={controlsDisabled}
-        onchange={(event) =>
-          changeSetting("card_size", event.currentTarget.value as CardSize)}
-      >
-        <option value="small">{text.cardSizeOptions.small}</option>
-        <option value="large">{text.cardSizeOptions.large}</option>
-      </select>
-    </label>
+      <label>
+        <span>{text.cardSize}</span>
+        <select
+          value={settings.card_size}
+          disabled={controlsDisabled}
+          onchange={(event) =>
+            changeSetting("card_size", event.currentTarget.value as CardSize)}
+        >
+          <option value="small">{text.cardSizeOptions.small}</option>
+          <option value="large">{text.cardSizeOptions.large}</option>
+        </select>
+      </label>
 
-    <label>
-      <span>{text.notificationSound}</span>
-      <select
-        value={settings.notification_sound}
-        disabled={controlsDisabled}
-        onchange={(event) =>
-          changeSetting("notification_sound", event.currentTarget.value as NotificationSound)}
-      >
-        <option value="none">{text.soundOptions.none}</option>
-        <option value="koron">{text.soundOptions.koron}</option>
-        <option value="kirari">{text.soundOptions.kirari}</option>
-        <option value="pikon">{text.soundOptions.pikon}</option>
-      </select>
-    </label>
+      <label>
+        <span>{text.notificationSound}</span>
+        <select
+          value={settings.notification_sound}
+          disabled={controlsDisabled}
+          onchange={(event) =>
+            changeSetting("notification_sound", event.currentTarget.value as NotificationSound)}
+        >
+          <option value="none">{text.soundOptions.none}</option>
+          <option value="koron">{text.soundOptions.koron}</option>
+          <option value="kirari">{text.soundOptions.kirari}</option>
+          <option value="pikon">{text.soundOptions.pikon}</option>
+        </select>
+      </label>
 
-    <label>
-      <span>{text.soundRepeat}</span>
-      <select
-        value={settings.sound_repeat}
-        disabled={controlsDisabled}
-        onchange={(event) =>
-          changeSetting("sound_repeat", event.currentTarget.value as SoundRepeat)}
-      >
-        <option value="none">{text.repeatOptions.none}</option>
-        <option value="one_minute">{text.repeatOptions.one_minute}</option>
-        <option value="three_minutes">{text.repeatOptions.three_minutes}</option>
-        <option value="five_minutes">{text.repeatOptions.five_minutes}</option>
-        <option value="ten_minutes">{text.repeatOptions.ten_minutes}</option>
-      </select>
-    </label>
-  </div>
+      <label>
+        <span>{text.soundRepeat}</span>
+        <select
+          value={settings.sound_repeat}
+          disabled={controlsDisabled}
+          onchange={(event) =>
+            changeSetting("sound_repeat", event.currentTarget.value as SoundRepeat)}
+        >
+          <option value="none">{text.repeatOptions.none}</option>
+          <option value="one_minute">{text.repeatOptions.one_minute}</option>
+          <option value="three_minutes">{text.repeatOptions.three_minutes}</option>
+          <option value="five_minutes">{text.repeatOptions.five_minutes}</option>
+          <option value="ten_minutes">{text.repeatOptions.ten_minutes}</option>
+        </select>
+      </label>
+    </div>
 
-  {#if errorMessage}
-    <p class="error" role="alert">{errorMessage}</p>
-  {/if}
-</main>
+    {#if errorMessage}
+      <p class="settings-error" role="alert">{errorMessage}</p>
+    {/if}
+  </main>
+{/if}
 
 <style>
   :global(*) {
@@ -236,16 +306,13 @@
     min-width: 320px;
     min-height: 100%;
     margin: 0;
+    overflow: hidden;
     background: #2d2d30;
     color: #dbdbdb;
     font-family: "Segoe UI Variable Text", "Yu Gothic UI", "Segoe UI", sans-serif;
   }
 
-  :global(body) {
-    overflow: hidden;
-  }
-
-  main {
+  .settings-page {
     --control-height: 32px;
     min-height: 100vh;
     padding: 24px;
@@ -292,10 +359,42 @@
     opacity: 0.58;
   }
 
-  .error {
+  .settings-error {
     margin: 16px 0 0;
     color: #e6a5a5;
     font-size: 13px;
     line-height: 20px;
+  }
+
+  .notification-page {
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+  }
+
+  .notification-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100vw;
+    height: 100vh;
+    padding: 16px;
+    border: 1px solid #744b50;
+    border-radius: 14px;
+    background: #303033;
+    color: #e6a5a5;
+    font-size: 13px;
+  }
+
+  .notification-error button {
+    min-width: 72px;
+    height: 32px;
+    border: 1px solid #53697f;
+    border-radius: 6px;
+    background: #465a70;
+    color: #dbdbdb;
+    font: inherit;
   }
 </style>
