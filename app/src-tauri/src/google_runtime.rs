@@ -186,14 +186,6 @@ pub fn start(app: AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             api.prevent_close();
         }
     });
-    if let Some(main) = app.get_webview_window("main") {
-        let handle = app.clone();
-        main.on_window_event(move |event| {
-            if matches!(event, WindowEvent::CloseRequested { .. }) {
-                handle.exit(0);
-            }
-        });
-    }
     let _ = render(&app, false);
     request(app.clone());
     tauri::async_runtime::spawn(async move {

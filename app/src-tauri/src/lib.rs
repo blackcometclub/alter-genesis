@@ -8,6 +8,7 @@ mod notification;
 mod notification_store;
 mod settings;
 mod sound;
+mod tray;
 
 use google::{GoogleState, GoogleView};
 use notification::{NotificationCard, NotificationState, unix_now_ms};
@@ -33,6 +34,7 @@ fn save_settings(
     settings: AppSettings,
 ) -> Result<AppSettings, String> {
     let saved = state.save(settings)?;
+    tray::language_changed(&app, &saved.language);
     if let Ok(now) = unix_now_ms() {
         app.state::<SoundState>()
             .configure(&saved, || notification_visible(&app), now);
@@ -451,6 +453,7 @@ pub fn run() {
             }
             start_sound_timer(app.handle().clone());
             if !preview_requested {
+                tray::start(app.handle(), &current_settings.language)?;
                 google_runtime::start(app.handle().clone())?;
             }
 
