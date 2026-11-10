@@ -1,9 +1,11 @@
 mod notification;
 mod notification_store;
 mod settings;
+mod sound;
 
 use notification::{NotificationCard, NotificationState, unix_now_ms};
 use settings::{AppSettings, CardSize, SettingsState};
+use sound::SoundState;
 use std::path::PathBuf;
 use std::time::Duration;
 use tauri::{
@@ -18,10 +20,54 @@ fn load_settings(state: tauri::State<'_, SettingsState>) -> Result<AppSettings, 
 
 #[tauri::command]
 fn save_settings(
+    app: AppHandle,
     state: tauri::State<'_, SettingsState>,
     settings: AppSettings,
 ) -> Result<AppSettings, String> {
-    state.save(settings)
+    let saved = state.save(settings)?;
+    if let Ok(now) = unix_now_ms() {
+        app.state::<SoundState>()
+            .configure(&saved, || notification_visible(&app), now);
+    }
+    Ok(saved)
+}
+
+#[tauri::command]
+fn preview_sound(window: WebviewWindow, state: tauri::State<'_, SoundState>) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("sound_window_required".into());
+    }
+    state.preview()
+}
+
+fn notification_visible(app: &AppHandle) -> bool {
+    app.state::<NotificationState>()
+        .load()
+        .ok()
+        .flatten()
+        .is_some()
+}
+
+fn sound_presented(app: &AppHandle, play_initial: bool) {
+    if let Err(error) =
+        unix_now_ms().and_then(|now| app.state::<SoundState>().presented(now, play_initial))
+    {
+        eprintln!("{error}");
+    }
+}
+
+fn start_sound_timer(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            if let Err(error) = unix_now_ms().and_then(|now| {
+                app.state::<SoundState>()
+                    .tick(|| notification_visible(&app), now)
+            }) {
+                eprintln!("{error}");
+            }
+        }
+    });
 }
 
 #[tauri::command]
@@ -50,6 +96,7 @@ fn snooze_notification(
             return Err(error);
         }
     };
+    app.state::<SoundState>().pause();
     start_snooze_timer(app, window, generation);
     Ok(())
 }
@@ -68,6 +115,8 @@ fn start_snooze_timer(app: AppHandle, window: WebviewWindow, generation: u64) {
                         Ok(true) => {
                             if let Err(error) = window.show() {
                                 eprintln!("notification_show_failed: {error}");
+                            } else {
+                                sound_presented(&app, true);
                             }
                             break;
                         }
@@ -97,6 +146,7 @@ fn dismiss_notification(
     id: String,
 ) -> Result<(), String> {
     let preview_mode = state.dismiss(&id)?;
+    app.state::<SoundState>().pause();
 
     if preview_mode && let Some(main) = app.get_webview_window("main") {
         main.close().map_err(|error| error.to_string())?;
@@ -179,6 +229,7 @@ fn open_notification_preview(
 
     if visible {
         panel.show()?;
+        sound_presented(app.handle(), app.state::<NotificationState>().sound_on_open);
     }
     if let Some(generation) = app.state::<NotificationState>().pending_generation() {
         start_snooze_timer(app.handle().clone(), panel, generation);
@@ -196,11 +247,21 @@ pub fn run() {
             let path = settings_path(app)?;
             let notification_path = path.with_file_name("notifications.json");
             let settings_state = SettingsState::new(path);
-            let current_settings = settings_state.load().unwrap_or_default();
+            let loaded_settings = settings_state.load();
+            let current_settings = loaded_settings.clone().unwrap_or_default();
+            let sound_settings = if loaded_settings.is_ok() {
+                current_settings.clone()
+            } else {
+                AppSettings {
+                    notification_sound: settings::NotificationSound::None,
+                    ..current_settings.clone()
+                }
+            };
             let preview_notification = preview_requested
                 .then(|| NotificationCard::preview(current_settings.card_size.clone()));
 
             app.manage(settings_state);
+            app.manage(SoundState::new(&sound_settings));
             let notification_state = NotificationState::open(
                 notification_path,
                 preview_notification,
@@ -214,12 +275,14 @@ pub fn run() {
             if let Some(card) = panel_card {
                 open_notification_preview(app, &card.card_size, visible)?;
             }
+            start_sound_timer(app.handle().clone());
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             load_settings,
             save_settings,
+            preview_sound,
             load_notification,
             dismiss_notification,
             snooze_notification

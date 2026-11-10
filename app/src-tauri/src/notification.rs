@@ -54,6 +54,7 @@ impl NotificationSession {
 
 pub struct NotificationState {
     session: Mutex<NotificationSession>,
+    pub sound_on_open: bool,
 }
 
 impl NotificationState {
@@ -64,9 +65,11 @@ impl NotificationState {
         now: u64,
     ) -> Self {
         let mut store = NotificationStore::open(path);
+        let mut new_preview = false;
         let record = match store.load() {
             Ok(Some(saved)) => saved,
             Ok(None) => {
+                new_preview = true;
                 let seed = preview.map(|card| SavedNotification {
                     card,
                     snooze_until_unix_ms: None,
@@ -80,6 +83,26 @@ impl NotificationState {
             }
             Err(_) => None,
         };
+        let mut sound_on_open = record.as_ref().is_some_and(|saved| {
+            new_preview
+                || saved
+                    .snooze_until_unix_ms
+                    .is_some_and(|deadline| deadline <= now)
+        });
+        if !new_preview
+            && sound_on_open
+            && let Some(saved) = &record
+        {
+            // Once presented, this is a visible card, not another overdue alarm on every launch.
+            if let Err(error) = store.save(Some(SavedNotification {
+                card: saved.card.clone(),
+                snooze_until_unix_ms: None,
+            })) {
+                // Keep the overdue card visible even when optional sound bookkeeping fails.
+                sound_on_open = false;
+                eprintln!("notification_visible_save_failed: {error}");
+            }
+        }
         let (active, pending) = match record {
             Some(SavedNotification {
                 card,
@@ -89,6 +112,7 @@ impl NotificationState {
             None => (None, None),
         };
         Self {
+            sound_on_open,
             session: Mutex::new(NotificationSession {
                 active,
                 pending,
@@ -204,7 +228,13 @@ impl NotificationState {
             return Ok(false);
         }
         let (card, _, _) = session.pending.take().ok_or("notification_not_found")?;
-        // An expired on-disk snooze is also visible on restart. No disk write is needed here.
+        // A failed write must not prevent an overdue card from returning to the screen.
+        if let Err(error) = session.store.save(Some(SavedNotification {
+            card: card.clone(),
+            snooze_until_unix_ms: None,
+        })) {
+            eprintln!("notification_visible_save_failed: {error}");
+        }
         session.active = Some(card);
         Ok(true)
     }
@@ -269,15 +299,22 @@ mod tests {
     fn overdue_and_visible_cards_restore_but_dismissed_cards_do_not() {
         let f = Fixture::new();
         let state = f.open(1_000_000);
+        assert!(state.sound_on_open);
         let card = state.load().unwrap().unwrap();
         drop(state);
         let state = f.open(1_001_000);
+        assert!(!state.sound_on_open);
         assert_eq!(state.load().unwrap(), Some(card.clone()));
         state.snooze(&card.id, 1_001_000).unwrap();
         drop(state);
         let state = NotificationState::open(f.path(), None, false, 1_500_000);
+        assert!(state.sound_on_open);
         assert_eq!(state.load().unwrap(), Some(card.clone()));
         assert_eq!(state.pending_generation(), None);
+        drop(state);
+        let state = NotificationState::open(f.path(), None, false, 1_501_000);
+        assert!(!state.sound_on_open);
+        assert_eq!(state.load().unwrap(), Some(card.clone()));
         state.dismiss(&card.id).unwrap();
         drop(state);
         assert_eq!(f.open(1_600_000).load().unwrap(), None);

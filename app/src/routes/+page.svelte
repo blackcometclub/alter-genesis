@@ -39,6 +39,7 @@
       language: "言語",
       cardSize: "カードの大きさ",
       notificationSound: "通知音",
+      preview: "試聴",
       soundRepeat: "音の繰り返し",
       close: "閉じる",
       snooze: "5分後に再通知",
@@ -64,6 +65,8 @@
         notification_io_error: "通知を読み書きできませんでした。",
         notification_protected: "通知ファイルを読み取れません。元の内容は変更していません。",
         notification_in_use: "同じ保存先のALTER GENESISがすでに起動しています。",
+        sound_playback_failed: "音を再生できませんでした。",
+        sound_state_unavailable: "音を一時的に利用できません。",
         unknown: "設定を保存できませんでした。",
       },
     },
@@ -72,6 +75,7 @@
       language: "Language",
       cardSize: "Card size",
       notificationSound: "Notification sound",
+      preview: "Preview",
       soundRepeat: "Repeat sound",
       close: "Close",
       snooze: "Remind in 5 min",
@@ -97,6 +101,8 @@
         notification_io_error: "Notifications could not be read or written.",
         notification_protected: "The notification file could not be read. Its contents were not changed.",
         notification_in_use: "ALTER GENESIS is already using this data folder.",
+        sound_playback_failed: "The sound could not be played.",
+        sound_state_unavailable: "Sound is temporarily unavailable.",
         unknown: "Settings could not be saved.",
       },
     },
@@ -111,6 +117,7 @@
   let saving = $state(false);
   let blocked = $state(false);
   let errorCode = $state("");
+  let previewing = $state(false);
   let notification = $state<ActiveNotification | null>(null);
   let notificationBusy = $state(false);
   let notificationError = $state("");
@@ -188,6 +195,19 @@
       notificationError = text.notificationSnoozeError;
     } finally {
       notificationBusy = false;
+    }
+  }
+
+  async function previewSound() {
+    if (controlsDisabled || previewing || settings.notification_sound === "none") return;
+    previewing = true;
+    errorCode = "";
+    try {
+      await invoke("preview_sound");
+    } catch (error) {
+      errorCode = normalizeError(error);
+    } finally {
+      previewing = false;
     }
   }
 
@@ -285,20 +305,24 @@
         </select>
       </label>
 
-      <label>
-        <span>{text.notificationSound}</span>
-        <select
-          value={settings.notification_sound}
-          disabled={controlsDisabled}
-          onchange={(event) =>
-            changeSetting("notification_sound", event.currentTarget.value as NotificationSound)}
-        >
-          <option value="none">{text.soundOptions.none}</option>
-          <option value="koron">{text.soundOptions.koron}</option>
-          <option value="kirari">{text.soundOptions.kirari}</option>
-          <option value="pikon">{text.soundOptions.pikon}</option>
-        </select>
-      </label>
+      <div class="sound-setting">
+        <label for="notification-sound">{text.notificationSound}</label>
+        <div class="sound-controls">
+          <select
+            id="notification-sound"
+            value={settings.notification_sound}
+            disabled={controlsDisabled}
+            onchange={(event) =>
+              changeSetting("notification_sound", event.currentTarget.value as NotificationSound)}
+          >
+            <option value="none">{text.soundOptions.none}</option>
+            <option value="koron">{text.soundOptions.koron}</option>
+            <option value="kirari">{text.soundOptions.kirari}</option>
+            <option value="pikon">{text.soundOptions.pikon}</option>
+          </select>
+          <button type="button" disabled={controlsDisabled || previewing || settings.notification_sound === "none"} onclick={previewSound}>{text.preview}</button>
+        </div>
+      </div>
 
       <label>
         <span>{text.soundRepeat}</span>
@@ -358,6 +382,38 @@
     font-weight: 600;
     line-height: 20px;
   }
+
+  .sound-setting {
+    display: grid;
+    gap: 8px;
+  }
+
+  .sound-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px;
+    gap: 8px;
+  }
+
+  .sound-controls button {
+    height: var(--control-height);
+    margin: 0;
+    padding: 0 16px;
+    border: 1px solid #53697f;
+    border-radius: 6px;
+    background: #465a70;
+    color: #dbdbdb;
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .sound-controls button:hover:not(:disabled) { background: #526d86; }
+  .sound-controls button:active:not(:disabled) { background: #3b5065; }
+  .sound-controls button:focus-visible {
+    outline: 2px solid #8aa8c6;
+    outline-offset: 1px;
+  }
+  .sound-controls button:disabled { opacity: 0.58; cursor: default; }
 
   select {
     width: 100%;
