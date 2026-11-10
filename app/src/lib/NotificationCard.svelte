@@ -17,13 +17,15 @@
     errorMessage: string;
     onDismiss: () => void | Promise<void>;
     onSnooze: () => void | Promise<void>;
+    stacked?: boolean;
   };
 
-  let { notification, closeLabel, snoozeLabel, busy, errorMessage, onDismiss, onSnooze }: Props = $props();
+  let { notification, closeLabel, snoozeLabel, busy, errorMessage, onDismiss, onSnooze, stacked = false }: Props = $props();
 </script>
 
 <article
   class:large={notification.card_size === "large"}
+  class:stacked
   class="notification-card"
   aria-label={notification.title}
   aria-busy={busy}
@@ -45,6 +47,8 @@
 </article>
 
 <style>
+  .notification-card.stacked { width: 100%; height: 130px; border-radius: 0; box-shadow: none; }
+  .notification-card.large.stacked { height: 154px; }
   .notification-card {
     --control-height: 32px;
     display: grid;

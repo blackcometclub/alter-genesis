@@ -1,5 +1,8 @@
 mod google;
 mod google_auth;
+mod google_events;
+mod google_queue;
+mod google_runtime;
 mod google_store;
 mod notification;
 mod notification_store;
@@ -34,6 +37,11 @@ fn save_settings(
         app.state::<SoundState>()
             .configure(&saved, || notification_visible(&app), now);
     }
+    if let Some(panel) = app.get_webview_window("google-notifications") {
+        use tauri::Emitter;
+        let _ = panel.emit("settings-changed", &saved);
+        let _ = google_runtime::render(&app, false);
+    }
     Ok(saved)
 }
 
@@ -58,11 +66,13 @@ fn google_size(window: &WebviewWindow, view: &GoogleView) {
 }
 #[tauri::command]
 fn load_google(
+    app: AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, GoogleState>,
 ) -> Result<GoogleView, String> {
     google_window(&window)?;
-    let view = state.load()?;
+    let _ = &state;
+    let view = google_runtime::view(&app)?;
     google_size(&window, &view);
     Ok(view)
 }
@@ -73,55 +83,126 @@ async fn connect_google(
     state: tauri::State<'_, GoogleState>,
 ) -> Result<GoogleView, String> {
     google_window(&window)?;
-    let view = state
+    let runtime = app.state::<google_runtime::Runtime>();
+    runtime.cancel_pending(&app);
+    let _guard = runtime.coordinator.lock().await;
+    let browser_app = app.clone();
+    let result = state
         .connect(move |url| {
-            app.opener()
+            browser_app
+                .opener()
                 .open_url(url, None::<&str>)
                 .map_err(|_| "google_browser_failed".into())
         })
-        .await?;
+        .await;
+    let result = match result {
+        Ok(_) => google_runtime::sync(&app, false).await,
+        Err(error) => Err(error),
+    };
+    runtime.error(&app, result.as_ref().err().cloned());
+    result?;
+    let view = google_runtime::view(&app)?;
     google_size(&window, &view);
     Ok(view)
 }
 #[tauri::command]
 async fn refresh_google(
+    app: AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, GoogleState>,
 ) -> Result<GoogleView, String> {
     google_window(&window)?;
-    let view = state.refresh().await?;
+    let _ = &state;
+    let runtime = app.state::<google_runtime::Runtime>();
+    runtime.cancel_pending(&app);
+    let _guard = runtime.coordinator.lock().await;
+    let result = google_runtime::sync(&app, true).await;
+    let _ = google_runtime::render(&app, false);
+    runtime.error(&app, result.as_ref().err().cloned());
+    result?;
+    let view = google_runtime::view(&app)?;
     google_size(&window, &view);
     Ok(view)
 }
 #[tauri::command]
 fn cancel_google(
+    app: AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, GoogleState>,
 ) -> Result<(), String> {
     google_window(&window)?;
-    state.cancel();
+    let _ = &state;
+    app.state::<google_runtime::Runtime>().cancel_pending(&app);
     Ok(())
 }
 #[tauri::command]
-fn disconnect_google(
+async fn disconnect_google(
+    app: AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, GoogleState>,
 ) -> Result<GoogleView, String> {
     google_window(&window)?;
-    let view = state.disconnect()?;
+    let runtime = app.state::<google_runtime::Runtime>();
+    runtime.cancel_pending(&app);
+    let _guard = runtime.coordinator.lock().await;
+    state.disconnect()?;
+    let result = app.state::<google_queue::GoogleQueue>().clear();
+    let _ = google_runtime::render(&app, false);
+    runtime.error(&app, result.err());
+    let view = google_runtime::view(&app)?;
     google_size(&window, &view);
     Ok(view)
 }
 
 #[tauri::command]
-fn set_google_calendar_selected(
+async fn set_google_calendar_selected(
+    app: AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, GoogleState>,
     id: String,
     selected: bool,
 ) -> Result<GoogleView, String> {
     google_window(&window)?;
-    state.set_selected(&id, selected)
+    let runtime = app.state::<google_runtime::Runtime>();
+    runtime.cancel_pending(&app);
+    let guard = runtime.coordinator.lock().await;
+    state.set_selected(&id, selected)?;
+    let result = app
+        .state::<google_queue::GoogleQueue>()
+        .retain_sources(&google_runtime::selected(&app));
+    let _ = google_runtime::render(&app, false);
+    runtime.error(&app, result.err());
+    let view = google_runtime::view(&app)?;
+    drop(guard);
+    google_runtime::request(app.clone());
+    Ok(view)
+}
+
+#[tauri::command]
+fn load_google_notifications(
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<google_queue::CardView>, String> {
+    if window.label() != "google-notifications" {
+        return Err("notification_window_required".into());
+    }
+    Ok(google_runtime::cards(&app))
+}
+#[tauri::command]
+async fn act_google_notification(
+    app: AppHandle,
+    window: WebviewWindow,
+    id: String,
+    snooze: bool,
+) -> Result<(), String> {
+    if window.label() != "google-notifications" {
+        return Err("notification_window_required".into());
+    }
+    app.state::<google_queue::GoogleQueue>()
+        .act(&id, snooze, unix_now_ms()?)?;
+    google_runtime::render(&app, false)?;
+    google_runtime::report(&app, "card_action");
+    Ok(())
 }
 
 fn notification_visible(app: &AppHandle) -> bool {
@@ -130,12 +211,16 @@ fn notification_visible(app: &AppHandle) -> bool {
         .ok()
         .flatten()
         .is_some()
+        || app
+            .state::<google_queue::GoogleQueue>()
+            .has_visible(&google_runtime::selected(app))
 }
 
 fn sound_presented(app: &AppHandle, play_initial: bool) {
-    if let Err(error) =
-        unix_now_ms().and_then(|now| app.state::<SoundState>().presented(now, play_initial))
-    {
+    if let Err(error) = unix_now_ms().and_then(|now| {
+        app.state::<SoundState>()
+            .presented(now, play_initial, || notification_visible(app))
+    }) {
         eprintln!("{error}");
     }
 }
@@ -331,6 +416,7 @@ pub fn run() {
             let path = settings_path(app)?;
             let notification_path = path.with_file_name("notifications.json");
             let google_path = path.with_file_name("google.dpapi");
+            let google_queue_path = path.with_file_name("google-notifications.dpapi");
             let settings_state = SettingsState::new(path);
             let loaded_settings = settings_state.load();
             let current_settings = loaded_settings.clone().unwrap_or_default();
@@ -347,6 +433,8 @@ pub fn run() {
 
             app.manage(settings_state);
             app.manage(GoogleState::new(google_path)?);
+            app.manage(google_queue::GoogleQueue::new(google_queue_path));
+            app.manage(google_runtime::Runtime::new());
             app.manage(SoundState::new(&sound_settings));
             let notification_state = NotificationState::open(
                 notification_path,
@@ -362,6 +450,9 @@ pub fn run() {
                 open_notification_preview(app, &card.card_size, visible)?;
             }
             start_sound_timer(app.handle().clone());
+            if !preview_requested {
+                google_runtime::start(app.handle().clone())?;
+            }
 
             Ok(())
         })
@@ -375,6 +466,8 @@ pub fn run() {
             cancel_google,
             disconnect_google,
             set_google_calendar_selected,
+            load_google_notifications,
+            act_google_notification,
             load_notification,
             dismiss_notification,
             snooze_notification

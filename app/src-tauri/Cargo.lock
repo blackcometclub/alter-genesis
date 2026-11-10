@@ -36,10 +36,12 @@ dependencies = [
 name = "alter-genesis"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "oauth2",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",

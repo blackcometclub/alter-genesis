@@ -29,6 +29,7 @@ pub struct GoogleView {
     pub connected: bool,
     pub calendars: Vec<Calendar>,
     pub selected_ids: Vec<String>,
+    pub sync_error: Option<String>,
     pub error: Option<String>,
 }
 
@@ -197,6 +198,14 @@ impl GoogleState {
         }
     }
 
+    pub fn selected_ids(&self) -> Vec<String> {
+        self.session
+            .lock()
+            .ok()
+            .and_then(|s| s.record.as_ref().and_then(|r| r.selected_ids.clone()))
+            .unwrap_or_default()
+    }
+
     pub fn load(&self) -> Result<GoogleView, String> {
         let session = self
             .session
@@ -216,6 +225,7 @@ impl GoogleState {
                 .as_ref()
                 .and_then(|r| r.selected_ids.clone())
                 .unwrap_or_default(),
+            sync_error: None,
         })
     }
 
@@ -380,6 +390,56 @@ impl GoogleState {
         self.load()
     }
 
+    pub async fn read_notifications(
+        &self,
+        now: u64,
+        from: u64,
+    ) -> Result<Vec<crate::google_events::Reminder>, String> {
+        let operation = self.begin()?;
+        let action = async {
+            let config = self.config()?;
+            let mut record = self
+                .session
+                .lock()
+                .map_err(|_| "google_state_unavailable")?
+                .record
+                .clone()
+                .ok_or("google_not_connected")?;
+            let selected = record.selected_ids.clone().unwrap_or_default();
+            if selected.is_empty() {
+                return Ok(vec![]);
+            }
+            let mut renewed = false;
+            if record.expires_at_ms <= now.saturating_add(60_000) {
+                self.renew(&mut record, &config, &operation.token).await?;
+                renewed = true;
+            }
+            let result = crate::google_events::fetch(
+                &self.http,
+                &record.access_token,
+                &record.calendars,
+                &selected,
+                now,
+                from,
+            )
+            .await;
+            if matches!(&result, Err(error) if error == "google_reconnect_required") && !renewed {
+                self.renew(&mut record, &config, &operation.token).await?;
+                return crate::google_events::fetch(
+                    &self.http,
+                    &record.access_token,
+                    &record.calendars,
+                    &selected,
+                    now,
+                    from,
+                )
+                .await;
+            }
+            result
+        };
+        tokio::select! { biased; _ = operation.token.cancelled() => Err("google_cancelled".into()), result = action => result }
+    }
+
     pub fn set_selected(&self, id: &str, selected: bool) -> Result<GoogleView, String> {
         let operation = self.begin()?;
         self.config()?;
@@ -422,6 +482,12 @@ fn validate_scopes(token: &oauth2::basic::BasicTokenResponse) -> Result<(), Stri
         .is_some_and(|scopes| !scopes.iter().any(|scope| scope.as_str() == LIST_SCOPE))
     {
         Err("google_permission_denied".into())
+    } else if token.scopes().is_some_and(|scopes| {
+        !scopes
+            .iter()
+            .any(|scope| scope.as_str() == crate::google_events::EVENTS_SCOPE)
+    }) {
+        Err("google_events_permission_required".into())
     } else {
         Ok(())
     }

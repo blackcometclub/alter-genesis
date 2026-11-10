@@ -79,6 +79,7 @@ pub fn authorization(client: &GoogleClient) -> (url::Url, CsrfToken, oauth2::Pkc
     let (url, state) = client
         .authorize_url(CsrfToken::new_random)
         .add_scope(Scope::new(LIST_SCOPE.into()))
+        .add_scope(Scope::new(crate::google_events::EVENTS_SCOPE.into()))
         .set_pkce_challenge(challenge)
         .add_extra_param("access_type", "offline")
         .add_extra_param("prompt", "select_account consent")
@@ -213,14 +214,20 @@ mod tests {
         .unwrap()
     }
     #[test]
-    fn authorization_uses_pkce_and_only_the_calendar_list_scope() {
+    fn authorization_uses_pkce_and_readonly_list_and_event_scopes() {
         let client = config()
             .client(Some("http://127.0.0.1:54321/oauth2callback".into()))
             .unwrap();
         let (url, state, verifier) = authorization(&client);
         let query: std::collections::HashMap<_, _> = url.query_pairs().collect();
         assert_eq!(url.host_str(), Some("accounts.google.com"));
-        assert_eq!(query.get("scope").unwrap(), LIST_SCOPE);
+        let scopes: std::collections::HashSet<_> = query.get("scope").unwrap().split(' ').collect();
+        assert_eq!(
+            scopes,
+            [LIST_SCOPE, crate::google_events::EVENTS_SCOPE]
+                .into_iter()
+                .collect()
+        );
         assert_eq!(query.get("code_challenge_method").unwrap(), "S256");
         assert_eq!(query.get("state").unwrap(), state.secret());
         assert!(verifier.secret().len() >= 43);

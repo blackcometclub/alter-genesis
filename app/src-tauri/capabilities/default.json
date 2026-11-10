@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "notification-panel"],
+  "windows": ["main", "notification-panel", "google-notifications"],
   "permissions": [
     "core:default",
     "core:window:allow-close",

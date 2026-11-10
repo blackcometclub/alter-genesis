@@ -138,8 +138,17 @@ impl SoundState {
         }
     }
 
-    pub fn presented(&self, now: u64, play_initial: bool) -> Result<(), String> {
+    pub fn presented(
+        &self,
+        now: u64,
+        play_initial: bool,
+        visible: impl FnOnce() -> bool,
+    ) -> Result<(), String> {
         let mut session = self.session.lock().map_err(|_| "sound_state_unavailable")?;
+        if !visible() {
+            session.schedule.next_due_ms = None;
+            return Ok(());
+        }
         let options = session.options.clone();
         session.schedule.reset(&options, true, now);
         if play_initial {

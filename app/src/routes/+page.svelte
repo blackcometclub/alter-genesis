@@ -2,8 +2,9 @@
   import { browser } from "$app/environment";
   import NotificationCard from "$lib/NotificationCard.svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
 
   type Language = "system" | "english" | "japanese";
   type CardSize = "small" | "large";
@@ -11,7 +12,7 @@
   type SoundRepeat = "none" | "one_minute" | "three_minutes" | "five_minutes" | "ten_minutes";
   type Locale = "ja" | "en";
   type GoogleCalendar = { id: string; name: string; color: string; primary: boolean };
-  type GoogleView = { configured: boolean; connected: boolean; calendars: GoogleCalendar[]; selected_ids: string[]; error: string | null };
+  type GoogleView = { configured: boolean; connected: boolean; calendars: GoogleCalendar[]; selected_ids: string[]; error: string | null; sync_error: string | null };
 
   type AppSettings = {
     language: Language;
@@ -43,6 +44,8 @@
       notificationSound: "通知音",
       preview: "試聴",
       google: "Googleカレンダー",
+      allDay: "終日",
+      untitled: "（無題）",
       connect: "接続",
       reconnect: "再接続",
       connecting: "接続中…",
@@ -93,6 +96,11 @@
         google_timeout: "Googleとの通信が間に合いませんでした。もう一度お試しください。",
         google_permission_denied: "カレンダー一覧の参照が許可されていません。再接続してください。",
         google_not_connected: "Googleに接続してください。",
+        google_events_permission_required: "予定の参照を許可するため、再接続してください。",
+        google_events_invalid: "予定の通知設定を読み取れませんでした。前の予約を残しています。",
+        google_queue_protected: "保存した通知を読み取れません。元の内容は変更していません。",
+        google_queue_save_failed: "通知を保存できませんでした。前の予約を残しています。",
+        notification_window_failed: "通知画面を表示できませんでした。",
         google_selection_invalid: "選択を保存できませんでした。更新して選び直してください。",
         google_catalog_invalid: "カレンダー一覧を読み取れませんでした。前の一覧を残しています。",
         unknown: "設定を保存できませんでした。",
@@ -105,6 +113,8 @@
       notificationSound: "Notification sound",
       preview: "Preview",
       google: "Google Calendar",
+      allDay: "All day",
+      untitled: "Untitled",
       connect: "Connect",
       reconnect: "Reconnect",
       connecting: "Connecting…",
@@ -155,6 +165,11 @@
         google_timeout: "The Google request timed out. Please try again.",
         google_permission_denied: "Calendar list access was not granted. Please reconnect.",
         google_not_connected: "Please connect to Google.",
+        google_events_permission_required: "Reconnect to allow event access.",
+        google_events_invalid: "Event reminders could not be read. Previous reminders were kept.",
+        google_queue_protected: "Saved reminders could not be read. Their contents were not changed.",
+        google_queue_save_failed: "Reminders could not be saved. Previous reminders were kept.",
+        notification_window_failed: "The notification window could not be shown.",
         google_selection_invalid: "The selection could not be saved. Refresh and choose again.",
         google_catalog_invalid: "The calendar list could not be read. The previous list was kept.",
         unknown: "Settings could not be saved.",
@@ -162,7 +177,8 @@
     },
   } as const;
 
-  const panelMode =
+  const googlePanelMode = browser && "__TAURI_INTERNALS__" in window && getCurrentWindow().label === "google-notifications";
+  const panelMode = googlePanelMode ||
     browser && "__TAURI_INTERNALS__" in window && getCurrentWindow().label === "notification-panel";
 
   let settings = $state<AppSettings>({ ...defaults });
@@ -172,15 +188,24 @@
   let blocked = $state(false);
   let errorCode = $state("");
   let previewing = $state(false);
-  let google = $state<GoogleView>({ configured: false, connected: false, calendars: [], selected_ids: [], error: null });
+  let google = $state<GoogleView>({ configured: false, connected: false, calendars: [], selected_ids: [], error: null, sync_error: null });
   let googleBusy = $state(true);
   let selectionSaving = $state(false);
   let googleError = $state("");
-  const needsReconnect = $derived(googleError === "google_reconnect_required" || googleError === "google_permission_denied");
+  const needsReconnect = $derived(googleError === "google_reconnect_required" || googleError === "google_permission_denied" || googleError === "google_events_permission_required");
   const googleAccount = $derived(google.calendars.find((calendar) => calendar.primary)?.id ?? "");
   let notification = $state<ActiveNotification | null>(null);
   let notificationBusy = $state(false);
   let notificationError = $state("");
+  type GoogleCard = ActiveNotification & { all_day: boolean; untitled: boolean };
+  let googleCards = $state<GoogleCard[]>([]);
+  const unlisten: (() => void)[] = [];
+  let disposed = false;
+  onDestroy(() => { disposed = true; unlisten.forEach(remove => remove()); });
+  async function subscribe<T>(name: string, receive: (value: T) => void) {
+    const remove = await listen<T>(name, event => receive(event.payload));
+    if (disposed) remove(); else unlisten.push(remove);
+  }
 
   const locale = $derived<Locale>(
     settings.language === "japanese"
@@ -200,6 +225,21 @@
 
   onMount(async () => {
     systemLocale = navigator.language.toLowerCase().startsWith("ja") ? "ja" : "en";
+    if (googlePanelMode) {
+      try {
+        await subscribe<GoogleCard[]>("google-notifications-changed", cards => { googleCards = cards; });
+        await subscribe<AppSettings>("settings-changed", value => { settings = value; void applyLanguage(); });
+        settings = await invoke<AppSettings>("load_settings");
+        googleCards = await invoke<GoogleCard[]>("load_google_notifications");
+      } catch { notificationError = text.notificationLoadError; }
+      loading = false;
+      await applyLanguage();
+      return;
+    }
+    if (!panelMode) await subscribe<GoogleView>("google-view-changed", value => {
+      google = value;
+      googleError = value.error ?? value.sync_error ?? "";
+    });
 
     try {
       settings = await invoke<AppSettings>("load_settings");
@@ -226,7 +266,7 @@
     if (!panelMode) {
       try {
         google = await invoke<GoogleView>("load_google");
-        googleError = google.error ?? (google.configured ? "" : "google_not_configured");
+        googleError = google.error ?? google.sync_error ?? (google.configured ? "" : "google_not_configured");
       } catch (error) {
         googleError = normalizeError(error);
       } finally { googleBusy = false; }
@@ -239,7 +279,7 @@
     googleError = "";
     try {
       google = await invoke<GoogleView>(command);
-      googleError = google.error ?? "";
+      googleError = google.error ?? google.sync_error ?? "";
     } catch (error) {
       googleError = normalizeError(error) === "google_cancelled" ? "" : normalizeError(error);
       try { google = await invoke<GoogleView>("load_google"); } catch { /* Keep the current list. */ }
@@ -259,11 +299,23 @@
     googleError = "";
     try {
       google = await invoke<GoogleView>("set_google_calendar_selected", { id, selected });
+      googleError = google.error ?? google.sync_error ?? "";
     } catch (error) {
       googleError = normalizeError(error);
     } finally {
       selectionSaving = false;
     }
+  }
+
+  async function actGoogleCard(id: string, snooze: boolean) {
+    if (notificationBusy) return;
+    notificationBusy = true;
+    notificationError = "";
+    try {
+      await invoke("act_google_notification", { id, snooze });
+      googleCards = await invoke<GoogleCard[]>("load_google_notifications");
+    } catch { notificationError = snooze ? text.notificationSnoozeError : text.notificationCloseError; }
+    finally { notificationBusy = false; }
   }
 
   async function changeSetting<Key extends keyof AppSettings>(
@@ -358,7 +410,16 @@
   <meta name="color-scheme" content="dark" />
 </svelte:head>
 
-{#if panelMode}
+{#if googlePanelMode}
+  <main class="google-notification-page" aria-busy={loading || notificationBusy}>
+    {#each googleCards as card (card.id)}
+      <NotificationCard notification={{ ...card, start_time: card.all_day ? text.allDay : card.start_time, title: card.untitled ? text.untitled : card.title }}
+        stacked={true} closeLabel={text.close} snoozeLabel={text.snooze}
+        onSnooze={() => actGoogleCard(card.id, true)} onDismiss={() => actGoogleCard(card.id, false)}
+        busy={notificationBusy} errorMessage={notificationError} />
+    {/each}
+  </main>
+{:else if panelMode}
   <main class="notification-page" aria-busy={loading || notificationBusy}>
     {#if notification}
       <NotificationCard
@@ -483,6 +544,7 @@
 {/if}
 
 <style>
+  .google-notification-page { height: 100vh; width: 100vw; overflow-y: auto; border-radius: 14px; }
   :global(*) {
     box-sizing: border-box;
   }
