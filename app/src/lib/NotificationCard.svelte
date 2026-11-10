@@ -12,11 +12,13 @@
   type Props = {
     notification: Notification;
     closeLabel: string;
+    snoozeLabel: string;
     busy: boolean;
     onDismiss: () => void | Promise<void>;
+    onSnooze: () => void | Promise<void>;
   };
 
-  let { notification, closeLabel, busy, onDismiss }: Props = $props();
+  let { notification, closeLabel, snoozeLabel, busy, onDismiss, onSnooze }: Props = $props();
 </script>
 
 <article
@@ -34,6 +36,7 @@
     </div>
 
     <div class="actions">
+      <button class="snooze" type="button" disabled={busy} onclick={onSnooze}>{snoozeLabel}</button>
       <button type="button" disabled={busy} onclick={onDismiss}>{closeLabel}</button>
     </div>
   </div>
@@ -108,6 +111,7 @@
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    gap: 8px;
   }
 
   button {
@@ -140,5 +144,11 @@
 
   button:disabled {
     opacity: 0.62;
+  }
+
+  .snooze {
+    border-color: #77737c;
+    background: #3b3a3e;
+    font-weight: 400;
   }
 </style>

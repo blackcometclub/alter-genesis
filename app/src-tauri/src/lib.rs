@@ -1,9 +1,10 @@
 mod notification;
 mod settings;
 
-use notification::{NotificationCard, NotificationState};
+use notification::{NotificationCard, NotificationState, SNOOZE_DURATION};
 use settings::{AppSettings, CardSize, SettingsState};
 use std::path::PathBuf;
+use std::time::Instant;
 use tauri::{
     AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
     WindowEvent,
@@ -27,6 +28,43 @@ fn load_notification(
     state: tauri::State<'_, NotificationState>,
 ) -> Result<Option<NotificationCard>, String> {
     state.load()
+}
+
+#[tauri::command]
+fn snooze_notification(
+    app: AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, NotificationState>,
+    id: String,
+) -> Result<(), String> {
+    if window.label() != "notification-panel" {
+        return Err("notification_window_required".into());
+    }
+    // Hide first so a window failure leaves the active notification intact.
+    window.hide().map_err(|error| error.to_string())?;
+    let generation = match state.snooze(&id, Instant::now()) {
+        Ok(token) => token,
+        Err(error) => {
+            let _ = window.show();
+            return Err(error);
+        }
+    };
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(SNOOZE_DURATION).await;
+        match app
+            .state::<NotificationState>()
+            .restore_due(generation, Instant::now())
+        {
+            Ok(true) => {
+                if let Err(error) = window.show() {
+                    eprintln!("notification_show_failed: {error}");
+                }
+            }
+            Ok(false) => {}
+            Err(error) => eprintln!("{error}"),
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -147,7 +185,8 @@ pub fn run() {
             load_settings,
             save_settings,
             load_notification,
-            dismiss_notification
+            dismiss_notification,
+            snooze_notification
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

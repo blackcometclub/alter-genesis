@@ -41,6 +41,8 @@
       notificationSound: "通知音",
       soundRepeat: "音の繰り返し",
       close: "閉じる",
+      snooze: "5分後に再通知",
+      notificationSnoozeError: "再通知を予約できませんでした。",
       notificationLoadError: "通知を表示できませんでした。",
       notificationCloseError: "通知を閉じられませんでした。",
       languageOptions: { system: "システム", english: "英語", japanese: "日本語" },
@@ -69,6 +71,8 @@
       notificationSound: "Notification sound",
       soundRepeat: "Repeat sound",
       close: "Close",
+      snooze: "Remind in 5 min",
+      notificationSnoozeError: "The reminder could not be scheduled.",
       notificationLoadError: "The notification could not be displayed.",
       notificationCloseError: "The notification could not be closed.",
       languageOptions: { system: "System", english: "English", japanese: "Japanese" },
@@ -167,6 +171,19 @@
     }
   }
 
+  async function snoozeNotification() {
+    if (!notification || notificationBusy) return;
+    notificationBusy = true;
+    notificationError = "";
+    try {
+      await invoke("snooze_notification", { id: notification.id });
+    } catch {
+      notificationError = text.notificationSnoozeError;
+    } finally {
+      notificationBusy = false;
+    }
+  }
+
   async function dismissNotification() {
     if (!notification || notificationBusy) {
       return;
@@ -218,6 +235,8 @@
       <NotificationCard
         {notification}
         closeLabel={text.close}
+        snoozeLabel={text.snooze}
+        onSnooze={snoozeNotification}
         busy={notificationBusy}
         onDismiss={dismissNotification}
       />
