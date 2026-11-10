@@ -1,5 +1,7 @@
 # 通常インストーラー
 
+このフォルダーはWPF版の参照用。現行Tauri版の通常配布は[packaging/tauri](../tauri/README.md)と`tools/Build-TauriInstaller.ps1`を使う。WPF用の配置先・AppId・データはTauriへ流用しない。
+
 `AlterGenesis.iss`は、Microsoft Storeを使わず直接配布するALTER GENESIS用のInno Setup定義。MSIX版も同じWPF本体と`eng/Product.props`の製品情報を使い、ここにMSIX固有処理を混ぜない。
 
 ## 作る

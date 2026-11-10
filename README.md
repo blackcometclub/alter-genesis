@@ -14,6 +14,8 @@ Googleカレンダーの予定を、ユーザーが自分で閉じるまで残�
 
 Tauri版が機能同等性と実画面確認を満たすまで、WPF版を削除しない。両実装の自動検証、実画面確認、ユーザー受け入れは別の証拠として記録する。
 
+Tauri版の通常インストーラーと固定配置は[packaging/tauri](packaging/tauri/README.md)を参照。`tools/Build-TauriInstaller.ps1`でNSIS Setupを作り、本体と設定を別々の場所に保つ。WPF用のInno定義や保存データはTauriへ流用しない。
+
 ## ライセンス
 
 ライセンスは未決定。現時点の公開はソース閲覧を目的とし、複製・再配布・改変の許諾を示すものではない。

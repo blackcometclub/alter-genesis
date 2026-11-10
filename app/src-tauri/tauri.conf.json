@@ -25,7 +25,21 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "publisher": "TINMOON",
+    "homepage": "https://tinmoon-label-site.pages.dev/works/alter-genesis/",
+    "shortDescription": "Google Calendar reminders that stay visible until dismissed.",
+    "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English", "Japanese"],
+        "displayLanguageSelector": false,
+        "startMenuFolder": "TINMOON",
+        "installerHooks": "./windows/installer-hooks.nsh"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -56,7 +56,7 @@ Googleへの要求権限は一覧と予定の読取りのみ。以前の一覧�
 
 もうあるか：Windowsの[FOLDERID_Startup](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid)と[IShellLinkW](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-ishelllinkw)をMicrosoftのwindows-rs経由で使う。レジストリRunへ登録する方式は採用しない。リンク作成は一時ファイルから置換禁止で移動し、同名ファイルが途中で現れた場合も保護する。
 
-開発用保存先`ALTER_GENESIS_SETTINGS_PATH`があるプロセスは、実Startupへの誤登録を防ぐため、試験用の絶対ディレクトリ`ALTER_GENESIS_STARTUP_DIR`の指定も必要。標準の配布起動には両方とも指定しない。CodexのMSIX転送下の存在確認と、Codex外の実Startupへの登録は別に検証する。インストーラーによる安定した配置先の整備と、実際のWindows再起動試験は後続の確認。
+開発用保存先`ALTER_GENESIS_SETTINGS_PATH`があるプロセスは、実Startupへの誤登録を防ぐため、試験用の絶対ディレクトリ`ALTER_GENESIS_STARTUP_DIR`の指定も必要。標準の配布起動には両方とも指定しない。CodexのMSIX転送下の存在確認と、Codex外の実Startupへの登録は別に検証する。通常版の固定配置とNSISインストーラーは[配布手順](../packaging/tauri/README.md)を参照。実際のWindows再起動試験は別の確認。
 確認（2026-11-10〜11）：Rust44試験、fmt、全ターゲットClippy、Svelte検査0エラー/0警告、Releaseに合格。専用フォルダーでチェックのオン・再起動後の復元・オフによる削除を確認した。`--startup`初回起動と重複起動では設定窓を出さず、通常の重複起動で同じ設定へ戻ることも確認した。
 
 利用者がCodex外のExplorerから確認用アプリを起動し、オン操作を実施。開発者は実StartupのExplorer画面にTauri用リンクと既存WPFリンクが並ぶことを確認し、設定からオフに戻した後、Tauri用だけが消える画像とファイルの不在を照合した。元からあった読取り可能なStartupファイルと元fixture4ファイルはハッシュ一致。確認用アプリは終了し、試験登録は残していない。Windowsへの実際の再サインイン・再起動は未確認。資料はGit除外の`artifacts/tauri-startup-20261110/`に保持する。
