@@ -47,17 +47,21 @@ fn report(reason: &str) {
     }
 }
 
-fn show_settings(app: &AppHandle) {
+pub(crate) fn show_settings(app: &AppHandle) -> bool {
     if let Some(window) = app.get_webview_window("main") {
         let result = window
             .unminimize()
             .and_then(|_| window.show())
             .and_then(|_| window.set_focus());
         match result {
-            Ok(()) => report("settings_shown"),
+            Ok(()) => {
+                report("settings_shown");
+                return true;
+            }
             Err(_) => eprintln!("tray_settings_show_failed"),
         }
     }
+    false
 }
 
 pub fn language_changed(app: &AppHandle, language: &Language) {
@@ -89,7 +93,9 @@ pub fn start(app: &AppHandle, language: &Language) -> Result<(), Box<dyn std::er
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            SETTINGS_ID => show_settings(app),
+            SETTINGS_ID => {
+                show_settings(app);
+            }
             EXIT_ID => {
                 report("exit_requested");
                 app.state::<GoogleState>().cancel();

@@ -15,6 +15,10 @@ use notification::{NotificationCard, NotificationState, unix_now_ms};
 use settings::{AppSettings, CardSize, SettingsState};
 use sound::SoundState;
 use std::path::PathBuf;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::Duration;
 use tauri::{
     AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
@@ -411,8 +415,22 @@ fn open_notification_preview(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let preview_requested = notification_preview_requested();
+    let reopen_requested = Arc::new(AtomicBool::new(false));
+    let mut builder = tauri::Builder::default();
+    if !preview_requested {
+        let reopen_on_second = Arc::clone(&reopen_requested);
+        // Register first: later launches must exit before stores, windows, and tray setup.
+        builder = builder.plugin(tauri_plugin_single_instance::init(
+            move |app, _args, _cwd| {
+                reopen_on_second.store(true, Ordering::SeqCst);
+                if tray::show_settings(app) {
+                    reopen_on_second.store(false, Ordering::SeqCst);
+                }
+            },
+        ));
+    }
 
-    tauri::Builder::default()
+    builder
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
             let path = settings_path(app)?;
@@ -455,6 +473,9 @@ pub fn run() {
             if !preview_requested {
                 tray::start(app.handle(), &current_settings.language)?;
                 google_runtime::start(app.handle().clone())?;
+                if reopen_requested.swap(false, Ordering::SeqCst) {
+                    tray::show_settings(app.handle());
+                }
             }
 
             Ok(())
