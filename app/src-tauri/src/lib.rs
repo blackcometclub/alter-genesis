@@ -1,8 +1,12 @@
+mod google;
+mod google_auth;
+mod google_store;
 mod notification;
 mod notification_store;
 mod settings;
 mod sound;
 
+use google::{GoogleState, GoogleView};
 use notification::{NotificationCard, NotificationState, unix_now_ms};
 use settings::{AppSettings, CardSize, SettingsState};
 use sound::SoundState;
@@ -12,6 +16,7 @@ use tauri::{
     AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
     WindowEvent,
 };
+use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
 fn load_settings(state: tauri::State<'_, SettingsState>) -> Result<AppSettings, String> {
@@ -38,6 +43,74 @@ fn preview_sound(window: WebviewWindow, state: tauri::State<'_, SoundState>) -> 
         return Err("sound_window_required".into());
     }
     state.preview()
+}
+
+fn google_window(window: &WebviewWindow) -> Result<(), String> {
+    if window.label() == "main" {
+        Ok(())
+    } else {
+        Err("google_window_required".into())
+    }
+}
+fn google_size(window: &WebviewWindow, view: &GoogleView) {
+    let height = if view.connected { 600.0 } else { 500.0 };
+    let _ = window.set_size(tauri::LogicalSize::new(408.0, height));
+}
+#[tauri::command]
+fn load_google(
+    window: WebviewWindow,
+    state: tauri::State<'_, GoogleState>,
+) -> Result<GoogleView, String> {
+    google_window(&window)?;
+    let view = state.load()?;
+    google_size(&window, &view);
+    Ok(view)
+}
+#[tauri::command]
+async fn connect_google(
+    app: AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, GoogleState>,
+) -> Result<GoogleView, String> {
+    google_window(&window)?;
+    let view = state
+        .connect(move |url| {
+            app.opener()
+                .open_url(url, None::<&str>)
+                .map_err(|_| "google_browser_failed".into())
+        })
+        .await?;
+    google_size(&window, &view);
+    Ok(view)
+}
+#[tauri::command]
+async fn refresh_google(
+    window: WebviewWindow,
+    state: tauri::State<'_, GoogleState>,
+) -> Result<GoogleView, String> {
+    google_window(&window)?;
+    let view = state.refresh().await?;
+    google_size(&window, &view);
+    Ok(view)
+}
+#[tauri::command]
+fn cancel_google(
+    window: WebviewWindow,
+    state: tauri::State<'_, GoogleState>,
+) -> Result<(), String> {
+    google_window(&window)?;
+    state.cancel();
+    Ok(())
+}
+#[tauri::command]
+fn disconnect_google(
+    window: WebviewWindow,
+    state: tauri::State<'_, GoogleState>,
+) -> Result<GoogleView, String> {
+    google_window(&window)?;
+    let view = state.disconnect()?;
+    google_size(&window, &view);
+    Ok(view)
 }
 
 fn notification_visible(app: &AppHandle) -> bool {
@@ -246,6 +319,7 @@ pub fn run() {
         .setup(move |app| {
             let path = settings_path(app)?;
             let notification_path = path.with_file_name("notifications.json");
+            let google_path = path.with_file_name("google.dpapi");
             let settings_state = SettingsState::new(path);
             let loaded_settings = settings_state.load();
             let current_settings = loaded_settings.clone().unwrap_or_default();
@@ -261,6 +335,7 @@ pub fn run() {
                 .then(|| NotificationCard::preview(current_settings.card_size.clone()));
 
             app.manage(settings_state);
+            app.manage(GoogleState::new(google_path)?);
             app.manage(SoundState::new(&sound_settings));
             let notification_state = NotificationState::open(
                 notification_path,
@@ -283,6 +358,11 @@ pub fn run() {
             load_settings,
             save_settings,
             preview_sound,
+            load_google,
+            connect_google,
+            refresh_google,
+            cancel_google,
+            disconnect_google,
             load_notification,
             dismiss_notification,
             snooze_notification

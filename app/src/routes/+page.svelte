@@ -10,6 +10,8 @@
   type NotificationSound = "none" | "koron" | "kirari" | "pikon";
   type SoundRepeat = "none" | "one_minute" | "three_minutes" | "five_minutes" | "ten_minutes";
   type Locale = "ja" | "en";
+  type GoogleCalendar = { id: string; name: string; color: string; primary: boolean };
+  type GoogleView = { configured: boolean; connected: boolean; calendars: GoogleCalendar[]; error: string | null };
 
   type AppSettings = {
     language: Language;
@@ -40,6 +42,14 @@
       cardSize: "カードの大きさ",
       notificationSound: "通知音",
       preview: "試聴",
+      google: "Googleカレンダー",
+      connect: "接続",
+      reconnect: "再接続",
+      connecting: "接続中…",
+      refresh: "更新",
+      disconnect: "切断",
+      cancel: "キャンセル",
+      noCalendars: "カレンダーがありません。",
       soundRepeat: "音の繰り返し",
       close: "閉じる",
       snooze: "5分後に再通知",
@@ -67,6 +77,23 @@
         notification_in_use: "同じ保存先のALTER GENESISがすでに起動しています。",
         sound_playback_failed: "音を再生できませんでした。",
         sound_state_unavailable: "音を一時的に利用できません。",
+        google_not_configured: "Google接続を利用できません。",
+        google_store_error: "接続情報を読み書きできませんでした。",
+        google_store_protected: "接続情報を読み取れません。元の内容は変更していません。",
+        google_client_changed: "接続情報を引き継げません。切断して、接続し直してください。",
+        google_in_use: "同じ保存先のALTER GENESISがすでに起動しています。",
+        google_busy: "Googleへの接続を処理しています。",
+        google_state_unavailable: "Google接続を一時的に利用できません。",
+        google_browser_failed: "ブラウザーを開けませんでした。接続し直してください。",
+        google_callback_failed: "ログイン結果を受け取れませんでした。接続し直してください。",
+        google_login_timeout: "ログインの待ち時間を過ぎました。接続し直してください。",
+        google_reconnect_required: "Googleへの再接続が必要です。",
+        google_auth_failed: "Googleにログインできませんでした。接続し直してください。",
+        google_network_error: "Googleから取得できませんでした。通信を確認して、更新してください。",
+        google_timeout: "Googleとの通信が間に合いませんでした。もう一度お試しください。",
+        google_permission_denied: "カレンダー一覧の参照が許可されていません。再接続してください。",
+        google_not_connected: "Googleに接続してください。",
+        google_catalog_invalid: "カレンダー一覧を読み取れませんでした。前の一覧を残しています。",
         unknown: "設定を保存できませんでした。",
       },
     },
@@ -76,6 +103,14 @@
       cardSize: "Card size",
       notificationSound: "Notification sound",
       preview: "Preview",
+      google: "Google Calendar",
+      connect: "Connect",
+      reconnect: "Reconnect",
+      connecting: "Connecting…",
+      refresh: "Refresh",
+      disconnect: "Disconnect",
+      cancel: "Cancel",
+      noCalendars: "No calendars.",
       soundRepeat: "Repeat sound",
       close: "Close",
       snooze: "Remind in 5 min",
@@ -103,6 +138,23 @@
         notification_in_use: "ALTER GENESIS is already using this data folder.",
         sound_playback_failed: "The sound could not be played.",
         sound_state_unavailable: "Sound is temporarily unavailable.",
+        google_not_configured: "Google connection is unavailable.",
+        google_store_error: "Connection data could not be read or saved.",
+        google_store_protected: "Connection data could not be read. Its contents were not changed.",
+        google_client_changed: "This connection cannot be restored. Disconnect, then connect again.",
+        google_in_use: "ALTER GENESIS is already using this data folder.",
+        google_busy: "A Google connection is in progress.",
+        google_state_unavailable: "Google connection is temporarily unavailable.",
+        google_browser_failed: "The browser could not be opened. Connect again.",
+        google_callback_failed: "The sign-in response was not received. Connect again.",
+        google_login_timeout: "Sign-in timed out. Connect again.",
+        google_reconnect_required: "Please reconnect to Google.",
+        google_auth_failed: "Google sign-in failed. Connect again.",
+        google_network_error: "Calendars could not be retrieved. Check your connection and refresh.",
+        google_timeout: "The Google request timed out. Please try again.",
+        google_permission_denied: "Calendar list access was not granted. Please reconnect.",
+        google_not_connected: "Please connect to Google.",
+        google_catalog_invalid: "The calendar list could not be read. The previous list was kept.",
         unknown: "Settings could not be saved.",
       },
     },
@@ -118,6 +170,11 @@
   let blocked = $state(false);
   let errorCode = $state("");
   let previewing = $state(false);
+  let google = $state<GoogleView>({ configured: false, connected: false, calendars: [], error: null });
+  let googleBusy = $state(true);
+  let googleError = $state("");
+  const needsReconnect = $derived(googleError === "google_reconnect_required" || googleError === "google_permission_denied");
+  const googleAccount = $derived(google.calendars.find((calendar) => calendar.primary)?.id ?? "");
   let notification = $state<ActiveNotification | null>(null);
   let notificationBusy = $state(false);
   let notificationError = $state("");
@@ -130,6 +187,7 @@
         : systemLocale,
   );
   const text = $derived(copy[locale]);
+  const googleMessage = $derived(googleError ? text.errors[googleError as keyof typeof text.errors] ?? text.errors.google_network_error : "");
   const controlsDisabled = $derived(loading || saving || blocked);
   const errorMessage = $derived(
     errorCode
@@ -162,7 +220,32 @@
       loading = false;
       await applyLanguage();
     }
+    if (!panelMode) {
+      try {
+        google = await invoke<GoogleView>("load_google");
+        googleError = google.error ?? (google.configured ? "" : "google_not_configured");
+      } catch (error) {
+        googleError = normalizeError(error);
+      } finally { googleBusy = false; }
+    }
   });
+
+  async function googleAction(command: "connect_google" | "refresh_google" | "disconnect_google") {
+    if (googleBusy) return;
+    googleBusy = true;
+    googleError = "";
+    try {
+      google = await invoke<GoogleView>(command);
+      googleError = google.error ?? "";
+    } catch (error) {
+      googleError = normalizeError(error) === "google_cancelled" ? "" : normalizeError(error);
+      try { google = await invoke<GoogleView>("load_google"); } catch { /* Keep the current list. */ }
+    } finally { googleBusy = false; }
+  }
+
+  async function cancelGoogle() {
+    try { await invoke("cancel_google"); } catch (error) { googleError = normalizeError(error); }
+  }
 
   async function changeSetting<Key extends keyof AppSettings>(
     key: Key,
@@ -320,7 +403,7 @@
             <option value="kirari">{text.soundOptions.kirari}</option>
             <option value="pikon">{text.soundOptions.pikon}</option>
           </select>
-          <button type="button" disabled={controlsDisabled || previewing || settings.notification_sound === "none"} onclick={previewSound}>{text.preview}</button>
+          <button class="settings-button" type="button" disabled={controlsDisabled || previewing || settings.notification_sound === "none"} onclick={previewSound}>{text.preview}</button>
         </div>
       </div>
 
@@ -344,6 +427,33 @@
     {#if errorMessage}
       <p class="settings-error" role="alert">{errorMessage}</p>
     {/if}
+    <section class="google-section" aria-label={text.google} aria-busy={googleBusy}>
+      <h2>{text.google}</h2>
+      <div class="google-actions">
+        {#if !google.connected || needsReconnect}
+          <button class="settings-button" type="button" disabled={googleBusy || !google.configured || !!google.error} onclick={() => googleAction("connect_google")}>{googleBusy ? text.connecting : needsReconnect ? text.reconnect : text.connect}</button>
+        {/if}
+        {#if google.connected}
+          <button class="settings-button" type="button" disabled={googleBusy} onclick={() => googleAction("refresh_google")}>{text.refresh}</button>
+        {/if}
+        {#if googleBusy}
+          <button class="settings-button" type="button" onclick={cancelGoogle}>{text.cancel}</button>
+        {:else if google.connected || google.error}
+          <button class="settings-button" type="button" onclick={() => googleAction("disconnect_google")}>{text.disconnect}</button>
+        {/if}
+      </div>
+      {#if googleAccount}<p class="google-account">{googleAccount}</p>{/if}
+      {#if google.calendars.length}
+        <ul class="google-calendars">
+          {#each google.calendars as calendar (calendar.id)}
+            <li><span class="calendar-color" style:background-color={calendar.color} aria-hidden="true"></span><span>{calendar.name}</span></li>
+          {/each}
+        </ul>
+      {:else if google.connected && !googleBusy && !googleError}
+        <p class="google-message">{text.noCalendars}</p>
+      {/if}
+      {#if googleMessage}<p class="settings-error" role="alert">{googleMessage}</p>{/if}
+    </section>
   </main>
 {/if}
 
@@ -366,6 +476,8 @@
   .settings-page {
     --control-height: 32px;
     min-height: 100vh;
+    height: 100vh;
+    overflow-y: auto;
     padding: 24px;
     background: #2d2d30;
   }
@@ -394,7 +506,7 @@
     gap: 8px;
   }
 
-  .sound-controls button {
+  .settings-button {
     height: var(--control-height);
     margin: 0;
     padding: 0 16px;
@@ -407,13 +519,21 @@
     cursor: pointer;
   }
 
-  .sound-controls button:hover:not(:disabled) { background: #526d86; }
-  .sound-controls button:active:not(:disabled) { background: #3b5065; }
-  .sound-controls button:focus-visible {
+  .settings-button:hover:not(:disabled) { background: #526d86; }
+  .settings-button:active:not(:disabled) { background: #3b5065; }
+  .settings-button:focus-visible {
     outline: 2px solid #8aa8c6;
     outline-offset: 1px;
   }
-  .sound-controls button:disabled { opacity: 0.58; cursor: default; }
+  .settings-button:disabled { opacity: 0.58; cursor: default; }
+
+  .google-section { margin-top: 24px; }
+  .google-section h2 { margin: 0 0 8px; font-size: 14px; font-weight: 600; line-height: 20px; }
+  .google-actions { display: flex; gap: 8px; }
+  .google-account, .google-message { margin: 12px 0 0; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+  .google-calendars { max-height: 160px; overflow-y: auto; margin: 12px 0 0; padding: 0; list-style: none; }
+  .google-calendars li { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 0; font-size: 14px; line-height: 24px; overflow-wrap: anywhere; }
+  .calendar-color { flex: 0 0 8px; width: 8px; height: 16px; border-radius: 2px; }
 
   select {
     width: 100%;
