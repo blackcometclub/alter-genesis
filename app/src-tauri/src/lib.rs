@@ -8,6 +8,7 @@ mod notification;
 mod notification_store;
 mod settings;
 mod sound;
+mod startup;
 mod tray;
 
 use google::{GoogleState, GoogleView};
@@ -67,7 +68,7 @@ fn google_window(window: &WebviewWindow) -> Result<(), String> {
     }
 }
 fn google_size(window: &WebviewWindow, view: &GoogleView) {
-    let height = if view.connected { 600.0 } else { 500.0 };
+    let height = if view.connected { 648.0 } else { 548.0 };
     let _ = window.set_size(tauri::LogicalSize::new(408.0, height));
 }
 #[tauri::command]
@@ -415,13 +416,17 @@ fn open_notification_preview(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let preview_requested = notification_preview_requested();
+    let startup_requested = startup::requested(std::env::args().skip(1));
     let reopen_requested = Arc::new(AtomicBool::new(false));
     let mut builder = tauri::Builder::default();
     if !preview_requested {
         let reopen_on_second = Arc::clone(&reopen_requested);
         // Register first: later launches must exit before stores, windows, and tray setup.
         builder = builder.plugin(tauri_plugin_single_instance::init(
-            move |app, _args, _cwd| {
+            move |app, args, _cwd| {
+                if startup::requested(args.into_iter().skip(1)) {
+                    return;
+                }
                 reopen_on_second.store(true, Ordering::SeqCst);
                 if tray::show_settings(app) {
                     reopen_on_second.store(false, Ordering::SeqCst);
@@ -473,7 +478,7 @@ pub fn run() {
             if !preview_requested {
                 tray::start(app.handle(), &current_settings.language)?;
                 google_runtime::start(app.handle().clone())?;
-                if reopen_requested.swap(false, Ordering::SeqCst) {
+                if reopen_requested.swap(false, Ordering::SeqCst) || !startup_requested {
                     tray::show_settings(app.handle());
                 }
             }
@@ -481,6 +486,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            startup::load_startup,
+            startup::set_startup,
             load_settings,
             save_settings,
             preview_sound,

@@ -14,7 +14,8 @@
       {
         "title": "設定 — ALTER GENESIS",
         "width": 408,
-        "height": 500,
+        "height": 548,
+        "visible": false,
         "resizable": false
       }
     ],

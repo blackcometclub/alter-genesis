@@ -54,6 +54,10 @@
       cancel: "キャンセル",
       noCalendars: "カレンダーがありません。",
       soundRepeat: "音の繰り返し",
+      startup: "Windowsへのサインイン時に起動",
+      startupReadError: "自動起動の設定を読み取れませんでした。",
+      startupWriteError: "自動起動の設定を変更できませんでした。",
+      startupConflict: "別のショートカットがあるため、自動起動を変更できません。",
       close: "閉じる",
       snooze: "5分後に再通知",
       notificationSnoozeError: "再通知を予約できませんでした。",
@@ -123,6 +127,10 @@
       cancel: "Cancel",
       noCalendars: "No calendars.",
       soundRepeat: "Repeat sound",
+      startup: "Start at Windows sign-in",
+      startupReadError: "The startup setting could not be read.",
+      startupWriteError: "The startup setting could not be changed.",
+      startupConflict: "Another shortcut is present. Startup was not changed.",
       close: "Close",
       snooze: "Remind in 5 min",
       notificationSnoozeError: "The reminder could not be scheduled.",
@@ -188,6 +196,10 @@
   let blocked = $state(false);
   let errorCode = $state("");
   let previewing = $state(false);
+  let startupEnabled = $state(false);
+  let startupLoaded = $state(false);
+  let startupBusy = $state(false);
+  let startupError = $state("");
   let google = $state<GoogleView>({ configured: false, connected: false, calendars: [], selected_ids: [], error: null, sync_error: null });
   let googleBusy = $state(true);
   let selectionSaving = $state(false);
@@ -215,6 +227,8 @@
         : systemLocale,
   );
   const text = $derived(copy[locale]);
+  const startupMessage = $derived(startupError === "startup_conflict" ? text.startupConflict
+    : startupError === "write" ? text.startupWriteError : startupError ? text.startupReadError : "");
   const googleMessage = $derived(googleError ? text.errors[googleError as keyof typeof text.errors] ?? text.errors.google_network_error : "");
   const controlsDisabled = $derived(loading || saving || blocked);
   const errorMessage = $derived(
@@ -264,6 +278,7 @@
       await applyLanguage();
     }
     if (!panelMode) {
+      await loadStartup();
       try {
         google = await invoke<GoogleView>("load_google");
         googleError = google.error ?? google.sync_error ?? (google.configured ? "" : "google_not_configured");
@@ -272,6 +287,33 @@
       } finally { googleBusy = false; }
     }
   });
+
+  async function loadStartup() {
+    if (panelMode || startupBusy) return;
+    startupBusy = true;
+    try {
+      startupEnabled = await invoke<boolean>("load_startup");
+      startupLoaded = true;
+      startupError = "";
+    } catch (error) {
+      startupLoaded = false;
+      startupError = normalizeError(error);
+    } finally { startupBusy = false; }
+  }
+
+  async function changeStartup(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const enabled = input.checked;
+    input.checked = startupEnabled;
+    if (startupBusy || !startupLoaded) return;
+    startupBusy = true;
+    startupError = "";
+    try {
+      startupEnabled = await invoke<boolean>("set_startup", { enabled });
+    } catch (error) {
+      startupError = normalizeError(error) === "startup_conflict" ? "startup_conflict" : "write";
+    } finally { startupBusy = false; }
+  }
 
   async function googleAction(command: "connect_google" | "refresh_google" | "disconnect_google") {
     if (googleBusy || selectionSaving) return;
@@ -410,6 +452,8 @@
   <meta name="color-scheme" content="dark" />
 </svelte:head>
 
+<svelte:window onfocus={() => { if (!panelMode && !loading) void loadStartup(); }} />
+
 {#if googlePanelMode}
   <main class="google-notification-page" aria-busy={loading || notificationBusy}>
     {#each googleCards as card (card.id)}
@@ -504,6 +548,12 @@
       </label>
     </div>
 
+    <label class="startup-choice">
+      <input type="checkbox" checked={startupEnabled} disabled={!startupLoaded}
+        aria-disabled={startupBusy} onchange={changeStartup} />
+      <span>{text.startup}</span>
+    </label>
+    {#if startupMessage}<p class="settings-error" role="alert">{startupMessage}</p>{/if}
     {#if errorMessage}
       <p class="settings-error" role="alert">{errorMessage}</p>
     {/if}
@@ -573,6 +623,11 @@
     display: grid;
     gap: 16px;
   }
+
+  .startup-choice { display: flex; align-items: center; gap: 8px; min-height: var(--control-height); margin-top: 16px; font-weight: 400; cursor: pointer; }
+  .startup-choice:has(input:disabled), .startup-choice:has(input[aria-disabled="true"]) { cursor: default; opacity: 0.58; }
+  .startup-choice input { flex: 0 0 16px; width: 16px; height: 16px; margin: 0; accent-color: #8aa8c6; }
+  .startup-choice input:focus-visible { outline: 2px solid #8aa8c6; outline-offset: 2px; }
 
   label {
     display: grid;
