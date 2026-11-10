@@ -14,11 +14,12 @@
     closeLabel: string;
     snoozeLabel: string;
     busy: boolean;
+    errorMessage: string;
     onDismiss: () => void | Promise<void>;
     onSnooze: () => void | Promise<void>;
   };
 
-  let { notification, closeLabel, snoozeLabel, busy, onDismiss, onSnooze }: Props = $props();
+  let { notification, closeLabel, snoozeLabel, busy, errorMessage, onDismiss, onSnooze }: Props = $props();
 </script>
 
 <article
@@ -35,6 +36,7 @@
       <span class="event-title">{notification.title}</span>
     </div>
 
+    {#if errorMessage}<p class="action-error" role="alert">{errorMessage}</p>{/if}
     <div class="actions">
       <button class="snooze" type="button" disabled={busy} onclick={onSnooze}>{snoozeLabel}</button>
       <button type="button" disabled={busy} onclick={onDismiss}>{closeLabel}</button>
@@ -63,6 +65,7 @@
   }
 
   .content {
+    position: relative;
     display: grid;
     grid-template-rows: 56px 8px 32px;
     min-width: 0;
@@ -112,6 +115,17 @@
     justify-content: flex-end;
     align-items: center;
     gap: 8px;
+  }
+
+  .action-error {
+    position: absolute;
+    right: 16px;
+    bottom: 52px;
+    left: 16px;
+    margin: 0;
+    color: #e6a5a5;
+    font-size: 13px;
+    line-height: 16px;
   }
 
   button {

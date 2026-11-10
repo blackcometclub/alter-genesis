@@ -61,6 +61,9 @@
         settings_unsupported_version: "新しい形式の設定です。この版では変更できません。",
         settings_protected: "設定を保護しています。この版では変更できません。",
         settings_state_unavailable: "設定を一時的に利用できません。",
+        notification_io_error: "通知を読み書きできませんでした。",
+        notification_protected: "通知ファイルを読み取れません。元の内容は変更していません。",
+        notification_in_use: "同じ保存先のALTER GENESISがすでに起動しています。",
         unknown: "設定を保存できませんでした。",
       },
     },
@@ -91,6 +94,9 @@
         settings_unsupported_version: "These settings use a newer format and cannot be changed here.",
         settings_protected: "The settings are protected and cannot be changed here.",
         settings_state_unavailable: "Settings are temporarily unavailable.",
+        notification_io_error: "Notifications could not be read or written.",
+        notification_protected: "The notification file could not be read. Its contents were not changed.",
+        notification_in_use: "ALTER GENESIS is already using this data folder.",
         unknown: "Settings could not be saved.",
       },
     },
@@ -131,8 +137,9 @@
       settings = await invoke<AppSettings>("load_settings");
       await applyLanguage();
 
+      const savedNotification = await invoke<ActiveNotification | null>("load_notification");
       if (panelMode) {
-        notification = await invoke<ActiveNotification | null>("load_notification");
+        notification = savedNotification;
         if (!notification) {
           await getCurrentWindow().close();
         }
@@ -238,6 +245,7 @@
         snoozeLabel={text.snooze}
         onSnooze={snoozeNotification}
         busy={notificationBusy}
+        errorMessage={notificationError}
         onDismiss={dismissNotification}
       />
     {:else if notificationError}

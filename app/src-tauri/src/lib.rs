@@ -1,10 +1,11 @@
 mod notification;
+mod notification_store;
 mod settings;
 
-use notification::{NotificationCard, NotificationState, SNOOZE_DURATION};
+use notification::{NotificationCard, NotificationState, unix_now_ms};
 use settings::{AppSettings, CardSize, SettingsState};
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::Duration;
 use tauri::{
     AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
     WindowEvent,
@@ -27,7 +28,7 @@ fn save_settings(
 fn load_notification(
     state: tauri::State<'_, NotificationState>,
 ) -> Result<Option<NotificationCard>, String> {
-    state.load()
+    state.panel_card()
 }
 
 #[tauri::command]
@@ -42,29 +43,51 @@ fn snooze_notification(
     }
     // Hide first so a window failure leaves the active notification intact.
     window.hide().map_err(|error| error.to_string())?;
-    let generation = match state.snooze(&id, Instant::now()) {
+    let generation = match unix_now_ms().and_then(|now| state.snooze(&id, now)) {
         Ok(token) => token,
         Err(error) => {
             let _ = window.show();
             return Err(error);
         }
     };
+    start_snooze_timer(app, window, generation);
+    Ok(())
+}
+
+fn start_snooze_timer(app: AppHandle, window: WebviewWindow, generation: u64) {
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(SNOOZE_DURATION).await;
-        match app
-            .state::<NotificationState>()
-            .restore_due(generation, Instant::now())
-        {
-            Ok(true) => {
-                if let Err(error) = window.show() {
-                    eprintln!("notification_show_failed: {error}");
+        loop {
+            let result = unix_now_ms()
+                .and_then(|now| app.state::<NotificationState>().remaining(generation, now));
+            match result {
+                Ok(Some(wait)) if wait.is_zero() => {
+                    match unix_now_ms().and_then(|now| {
+                        app.state::<NotificationState>()
+                            .restore_due(generation, now)
+                    }) {
+                        Ok(true) => {
+                            if let Err(error) = window.show() {
+                                eprintln!("notification_show_failed: {error}");
+                            }
+                            break;
+                        }
+                        Ok(false) => continue,
+                        Err(error) => {
+                            eprintln!("{error}");
+                            break;
+                        }
+                    }
+                }
+                // Recheck the wall clock after suspend or a system-clock adjustment.
+                Ok(Some(wait)) => tokio::time::sleep(wait.min(Duration::from_secs(1))).await,
+                Ok(None) => break,
+                Err(error) => {
+                    eprintln!("{error}");
+                    break;
                 }
             }
-            Ok(false) => {}
-            Err(error) => eprintln!("{error}"),
         }
     });
-    Ok(())
 }
 
 #[tauri::command]
@@ -122,6 +145,7 @@ fn position_at_work_area_bottom_right(window: &WebviewWindow) -> tauri::Result<(
 fn open_notification_preview(
     app: &tauri::App,
     card_size: &CardSize,
+    visible: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(main) = app.get_webview_window("main") {
         main.hide()?;
@@ -153,7 +177,12 @@ fn open_notification_preview(
         }
     });
 
-    panel.show()?;
+    if visible {
+        panel.show()?;
+    }
+    if let Some(generation) = app.state::<NotificationState>().pending_generation() {
+        start_snooze_timer(app.handle().clone(), panel, generation);
+    }
     Ok(())
 }
 
@@ -164,19 +193,26 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
-            let settings_state = SettingsState::new(settings_path(app)?);
+            let path = settings_path(app)?;
+            let notification_path = path.with_file_name("notifications.json");
+            let settings_state = SettingsState::new(path);
             let current_settings = settings_state.load().unwrap_or_default();
             let preview_notification = preview_requested
                 .then(|| NotificationCard::preview(current_settings.card_size.clone()));
 
             app.manage(settings_state);
-            app.manage(NotificationState::new(
+            let notification_state = NotificationState::open(
+                notification_path,
                 preview_notification,
                 preview_requested,
-            ));
+                unix_now_ms()?,
+            );
+            let panel_card = notification_state.panel_card().ok().flatten();
+            let visible = notification_state.load().ok().flatten().is_some();
+            app.manage(notification_state);
 
-            if preview_requested {
-                open_notification_preview(app, &current_settings.card_size)?;
+            if let Some(card) = panel_card {
+                open_notification_preview(app, &card.card_size, visible)?;
             }
 
             Ok(())
