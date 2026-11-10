@@ -11,7 +11,7 @@
   type SoundRepeat = "none" | "one_minute" | "three_minutes" | "five_minutes" | "ten_minutes";
   type Locale = "ja" | "en";
   type GoogleCalendar = { id: string; name: string; color: string; primary: boolean };
-  type GoogleView = { configured: boolean; connected: boolean; calendars: GoogleCalendar[]; error: string | null };
+  type GoogleView = { configured: boolean; connected: boolean; calendars: GoogleCalendar[]; selected_ids: string[]; error: string | null };
 
   type AppSettings = {
     language: Language;
@@ -93,6 +93,7 @@
         google_timeout: "Googleとの通信が間に合いませんでした。もう一度お試しください。",
         google_permission_denied: "カレンダー一覧の参照が許可されていません。再接続してください。",
         google_not_connected: "Googleに接続してください。",
+        google_selection_invalid: "選択を保存できませんでした。更新して選び直してください。",
         google_catalog_invalid: "カレンダー一覧を読み取れませんでした。前の一覧を残しています。",
         unknown: "設定を保存できませんでした。",
       },
@@ -154,6 +155,7 @@
         google_timeout: "The Google request timed out. Please try again.",
         google_permission_denied: "Calendar list access was not granted. Please reconnect.",
         google_not_connected: "Please connect to Google.",
+        google_selection_invalid: "The selection could not be saved. Refresh and choose again.",
         google_catalog_invalid: "The calendar list could not be read. The previous list was kept.",
         unknown: "Settings could not be saved.",
       },
@@ -170,8 +172,9 @@
   let blocked = $state(false);
   let errorCode = $state("");
   let previewing = $state(false);
-  let google = $state<GoogleView>({ configured: false, connected: false, calendars: [], error: null });
+  let google = $state<GoogleView>({ configured: false, connected: false, calendars: [], selected_ids: [], error: null });
   let googleBusy = $state(true);
+  let selectionSaving = $state(false);
   let googleError = $state("");
   const needsReconnect = $derived(googleError === "google_reconnect_required" || googleError === "google_permission_denied");
   const googleAccount = $derived(google.calendars.find((calendar) => calendar.primary)?.id ?? "");
@@ -231,7 +234,7 @@
   });
 
   async function googleAction(command: "connect_google" | "refresh_google" | "disconnect_google") {
-    if (googleBusy) return;
+    if (googleBusy || selectionSaving) return;
     googleBusy = true;
     googleError = "";
     try {
@@ -245,6 +248,22 @@
 
   async function cancelGoogle() {
     try { await invoke("cancel_google"); } catch (error) { googleError = normalizeError(error); }
+  }
+
+  async function changeCalendar(event: Event, id: string) {
+    const input = event.currentTarget as HTMLInputElement;
+    const selected = input.checked;
+    input.checked = google.selected_ids.includes(id);
+    if (googleBusy || selectionSaving || !google.connected || google.error) return;
+    selectionSaving = true;
+    googleError = "";
+    try {
+      google = await invoke<GoogleView>("set_google_calendar_selected", { id, selected });
+    } catch (error) {
+      googleError = normalizeError(error);
+    } finally {
+      selectionSaving = false;
+    }
   }
 
   async function changeSetting<Key extends keyof AppSettings>(
@@ -427,26 +446,32 @@
     {#if errorMessage}
       <p class="settings-error" role="alert">{errorMessage}</p>
     {/if}
-    <section class="google-section" aria-label={text.google} aria-busy={googleBusy}>
+    <section class="google-section" aria-label={text.google} aria-busy={googleBusy || selectionSaving}>
       <h2>{text.google}</h2>
       <div class="google-actions">
         {#if !google.connected || needsReconnect}
-          <button class="settings-button" type="button" disabled={googleBusy || !google.configured || !!google.error} onclick={() => googleAction("connect_google")}>{googleBusy ? text.connecting : needsReconnect ? text.reconnect : text.connect}</button>
+          <button class="settings-button" type="button" disabled={googleBusy || selectionSaving || !google.configured || !!google.error} onclick={() => googleAction("connect_google")}>{googleBusy ? text.connecting : needsReconnect ? text.reconnect : text.connect}</button>
         {/if}
         {#if google.connected}
-          <button class="settings-button" type="button" disabled={googleBusy} onclick={() => googleAction("refresh_google")}>{text.refresh}</button>
+          <button class="settings-button" type="button" disabled={googleBusy || selectionSaving} onclick={() => googleAction("refresh_google")}>{text.refresh}</button>
         {/if}
         {#if googleBusy}
           <button class="settings-button" type="button" onclick={cancelGoogle}>{text.cancel}</button>
         {:else if google.connected || google.error}
-          <button class="settings-button" type="button" onclick={() => googleAction("disconnect_google")}>{text.disconnect}</button>
+          <button class="settings-button" type="button" disabled={selectionSaving} onclick={() => googleAction("disconnect_google")}>{text.disconnect}</button>
         {/if}
       </div>
       {#if googleAccount}<p class="google-account">{googleAccount}</p>{/if}
       {#if google.calendars.length}
         <ul class="google-calendars">
           {#each google.calendars as calendar (calendar.id)}
-            <li><span class="calendar-color" style:background-color={calendar.color} aria-hidden="true"></span><span>{calendar.name}</span></li>
+            <li><label class="google-calendar-choice">
+              <input type="checkbox" checked={google.selected_ids.includes(calendar.id)}
+                disabled={googleBusy || !!google.error} aria-disabled={selectionSaving}
+                onchange={(event) => changeCalendar(event, calendar.id)} />
+              <span class="calendar-color" style:background-color={calendar.color} aria-hidden="true"></span>
+              <span>{calendar.name}</span>
+            </label></li>
           {/each}
         </ul>
       {:else if google.connected && !googleBusy && !googleError}
@@ -532,7 +557,10 @@
   .google-actions { display: flex; gap: 8px; }
   .google-account, .google-message { margin: 12px 0 0; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
   .google-calendars { max-height: 160px; overflow-y: auto; margin: 12px 0 0; padding: 0; list-style: none; }
-  .google-calendars li { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 0; font-size: 14px; line-height: 24px; overflow-wrap: anywhere; }
+  .google-calendar-choice { display: flex; align-items: center; gap: 8px; min-height: var(--control-height); padding: 4px 0; font-size: 14px; font-weight: 400; line-height: 24px; overflow-wrap: anywhere; cursor: pointer; }
+  .google-calendar-choice:has(input:disabled), .google-calendar-choice:has(input[aria-disabled="true"]) { cursor: default; opacity: 0.58; }
+  .google-calendar-choice input { flex: 0 0 16px; width: 16px; height: 16px; margin: 0; accent-color: #8aa8c6; }
+  .google-calendar-choice input:focus-visible { outline: 2px solid #8aa8c6; outline-offset: 2px; }
   .calendar-color { flex: 0 0 8px; width: 8px; height: 16px; border-radius: 2px; }
 
   select {

@@ -113,6 +113,17 @@ fn disconnect_google(
     Ok(view)
 }
 
+#[tauri::command]
+fn set_google_calendar_selected(
+    window: WebviewWindow,
+    state: tauri::State<'_, GoogleState>,
+    id: String,
+    selected: bool,
+) -> Result<GoogleView, String> {
+    google_window(&window)?;
+    state.set_selected(&id, selected)
+}
+
 fn notification_visible(app: &AppHandle) -> bool {
     app.state::<NotificationState>()
         .load()
@@ -363,6 +374,7 @@ pub fn run() {
             refresh_google,
             cancel_google,
             disconnect_google,
+            set_google_calendar_selected,
             load_notification,
             dismiss_notification,
             snooze_notification

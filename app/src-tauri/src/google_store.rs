@@ -180,10 +180,48 @@ impl GoogleStore {
         result.map_err(|_| "google_store_error".into())
     }
 
+    pub fn preserve_original(&self) -> Result<(), String> {
+        if self.error.is_some() || self.lock.is_none() {
+            return Err("google_store_error".into());
+        }
+        let original = fs::read(&self.path).map_err(|_| "google_store_error")?;
+        let backup = self.path.with_extension("dpapi.before-selection.bak");
+        if backup.exists() {
+            let metadata = fs::metadata(&backup).map_err(|_| "google_store_error")?;
+            if metadata.is_file()
+                && metadata.len() == original.len() as u64
+                && fs::read(&backup).map_err(|_| "google_store_error")? == original
+            {
+                return Ok(());
+            }
+            return Err("google_store_error".into());
+        }
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&backup)
+            .map_err(|_| "google_store_error")?;
+        if file
+            .write_all(&original)
+            .and_then(|_| file.sync_all())
+            .is_err()
+        {
+            drop(file);
+            let _ = fs::remove_file(&backup);
+            return Err("google_store_error".into());
+        }
+        Ok(())
+    }
+
     // Only the user's explicit disconnect may clear a protected or unreadable local record.
     pub fn clear(&mut self) -> Result<(), String> {
         if self.lock.is_none() {
             return Err("google_in_use".into());
+        }
+        match fs::remove_file(self.path.with_extension("dpapi.before-selection.bak")) {
+            Ok(()) => (),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+            Err(_) => return Err("google_store_error".into()),
         }
         match fs::remove_file(&self.path) {
             Ok(()) => (),

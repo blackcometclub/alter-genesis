@@ -28,6 +28,7 @@ pub struct GoogleView {
     pub configured: bool,
     pub connected: bool,
     pub calendars: Vec<Calendar>,
+    pub selected_ids: Vec<String>,
     pub error: Option<String>,
 }
 
@@ -40,6 +41,8 @@ struct Record {
     refresh_token: String,
     expires_at_ms: u64,
     calendars: Vec<Calendar>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    selected_ids: Option<Vec<String>>,
 }
 impl Drop for Record {
     fn drop(&mut self) {
@@ -57,6 +60,13 @@ impl Record {
             || self.access_token.len() > 16_384
             || self.refresh_token.len() > 16_384
             || self.calendars.len() > 5000
+            || self.selected_ids.as_ref().is_some_and(|ids| {
+                ids.len() > self.calendars.len()
+                    || ids.iter().collect::<HashSet<_>>().len() != ids.len()
+                    || ids
+                        .iter()
+                        .any(|id| !self.calendars.iter().any(|c| &c.id == id))
+            })
             || self.calendars.iter().any(|c| {
                 c.id.trim().is_empty()
                     || c.id.len() > 2048
@@ -74,6 +84,27 @@ impl Record {
             return Err("google_store_protected".into());
         }
         Ok(())
+    }
+
+    fn replace_calendars(&mut self, calendars: Vec<Calendar>) {
+        self.selected_ids
+            .get_or_insert_with(Vec::new)
+            .retain(|id| calendars.iter().any(|c| &c.id == id));
+        self.calendars = calendars;
+    }
+
+    fn selection_for_reconnection(&self, calendars: &[Calendar]) -> Vec<String> {
+        let previous = self.calendars.iter().find(|c| c.primary);
+        let next = calendars.iter().find(|c| c.primary);
+        if !matches!((previous, next), (Some(a), Some(b)) if a.id == b.id) {
+            return vec![];
+        }
+        self.selected_ids
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|id| calendars.iter().any(|c| &c.id == id))
+            .collect()
     }
 }
 
@@ -105,6 +136,10 @@ pub struct GoogleState {
 impl GoogleState {
     pub fn new(path: PathBuf) -> Result<Self, String> {
         let config = ClientConfig::embedded().ok();
+        Self::with_config(path, config)
+    }
+
+    fn with_config(path: PathBuf, config: Option<ClientConfig>) -> Result<Self, String> {
         let mut store = GoogleStore::new(path);
         let loaded = store.load::<Record>();
         let (record, error) = match loaded {
@@ -176,6 +211,11 @@ impl GoogleState {
                 .map(|r| r.calendars.clone())
                 .unwrap_or_default(),
             error: session.error.clone(),
+            selected_ids: session
+                .record
+                .as_ref()
+                .and_then(|r| r.selected_ids.clone())
+                .unwrap_or_default(),
         })
     }
 
@@ -190,7 +230,7 @@ impl GoogleState {
         self.config.clone().ok_or("google_not_configured".into())
     }
 
-    fn commit(&self, record: Record, token: &CancellationToken) -> Result<(), String> {
+    fn commit(&self, mut record: Record, token: &CancellationToken) -> Result<(), String> {
         // Serialize cancellation with the final save. A cancelled network result never replaces data.
         let _operation = self
             .operation
@@ -203,6 +243,14 @@ impl GoogleState {
             .session
             .lock()
             .map_err(|_| "google_state_unavailable")?;
+        if session
+            .record
+            .as_ref()
+            .is_some_and(|old| old.selected_ids.is_none())
+        {
+            session.store.preserve_original()?;
+        }
+        record.selected_ids.get_or_insert_with(Vec::new);
         session.store.save(&record)?;
         session.record = Some(record);
         session.error = None;
@@ -240,6 +288,14 @@ impl GoogleState {
                 .clone();
             let calendars =
                 fetch_catalog(&self.http, token.access_token().secret(), CATALOG_URL).await?;
+            let selected_ids = self
+                .session
+                .lock()
+                .map_err(|_| "google_state_unavailable")?
+                .record
+                .as_ref()
+                .map(|old| old.selection_for_reconnection(&calendars))
+                .unwrap_or_default();
             let record = Record {
                 version: 1,
                 client_id: config.client_id.clone(),
@@ -247,6 +303,7 @@ impl GoogleState {
                 refresh_token: refresh,
                 expires_at_ms: expires(&token)?,
                 calendars,
+                selected_ids: Some(selected_ids),
             };
             self.commit(record, &operation.token)?;
             self.load()
@@ -302,7 +359,7 @@ impl GoogleState {
                 }
                 other => other?,
             };
-            record.calendars = calendars;
+            record.replace_calendars(calendars);
             self.commit(record, &operation.token)?;
             self.load()
         };
@@ -320,6 +377,29 @@ impl GoogleState {
         session.record = None;
         session.error = None;
         drop(session);
+        self.load()
+    }
+
+    pub fn set_selected(&self, id: &str, selected: bool) -> Result<GoogleView, String> {
+        let operation = self.begin()?;
+        self.config()?;
+        let mut record = self
+            .session
+            .lock()
+            .map_err(|_| "google_state_unavailable")?
+            .record
+            .clone()
+            .ok_or("google_not_connected")?;
+        if !record.calendars.iter().any(|calendar| calendar.id == id) {
+            return Err("google_selection_invalid".into());
+        }
+        let ids = record.selected_ids.get_or_insert_with(Vec::new);
+        if selected && !ids.iter().any(|value| value == id) {
+            ids.push(id.to_owned());
+        } else if !selected {
+            ids.retain(|value| value != id);
+        }
+        self.commit(record, &operation.token)?;
         self.load()
     }
 }
@@ -490,7 +570,9 @@ mod tests {
             Self { path, root }
         }
         fn state(&self) -> GoogleState {
-            GoogleState::new(self.path.join("google.dpapi")).unwrap()
+            GoogleState::with_config(self.path.join("google.dpapi"), Some(ClientConfig::parse(
+                br#"{"client_id":"fixture.apps.googleusercontent.com","client_secret":"fixture"}"#
+            ).unwrap())).unwrap()
         }
     }
     impl Drop for Fixture {
@@ -513,6 +595,7 @@ mod tests {
                 color: "#123456".into(),
                 primary: true,
             }],
+            selected_ids: Some(vec![]),
         }
     }
     #[test]
@@ -530,6 +613,148 @@ mod tests {
         assert!(!f.path.join("google.dpapi").exists());
         drop(operation);
         assert!(state.begin().is_ok());
+    }
+
+    #[test]
+    fn legacy_selection_is_empty_backed_up_and_restored_without_losing_credentials() {
+        let f = Fixture::new();
+        let path = f.path.join("google.dpapi");
+        let mut legacy = record("Original");
+        legacy.selected_ids = None;
+        let store = GoogleStore::new(path.clone());
+        store.save(&legacy).unwrap();
+        drop(store);
+        let original = std::fs::read(&path).unwrap();
+        let state = f.state();
+        assert!(state.load().unwrap().selected_ids.is_empty());
+        assert_eq!(
+            state.set_selected("fixture", true).unwrap().selected_ids,
+            ["fixture"]
+        );
+        assert_eq!(
+            state.set_selected("fixture", true).unwrap().selected_ids,
+            ["fixture"]
+        );
+        let backup = path.with_extension("dpapi.before-selection.bak");
+        assert_eq!(std::fs::read(&backup).unwrap(), original);
+        drop(state);
+        let state = f.state();
+        let view = state.load().unwrap();
+        assert!(view.connected);
+        assert_eq!(view.selected_ids, ["fixture"]);
+        assert_eq!(view.calendars[0].name, "Original");
+        assert_eq!(
+            state
+                .session
+                .lock()
+                .unwrap()
+                .record
+                .as_ref()
+                .unwrap()
+                .refresh_token,
+            "fixture-refresh"
+        );
+        assert!(
+            state
+                .set_selected("fixture", false)
+                .unwrap()
+                .selected_ids
+                .is_empty()
+        );
+        drop(state);
+        let state = f.state();
+        assert!(state.load().unwrap().selected_ids.is_empty());
+        assert_eq!(std::fs::read(&backup).unwrap(), original);
+        state.disconnect().unwrap();
+        assert!(!path.exists());
+        assert!(!backup.exists());
+    }
+
+    #[test]
+    fn failed_selection_save_and_busy_operation_keep_previous_selection_and_bytes() {
+        let f = Fixture::new();
+        let state = f.state();
+        {
+            let operation = state.begin().unwrap();
+            state.commit(record("Original"), &operation.token).unwrap();
+            assert_eq!(
+                state.set_selected("fixture", true).err().unwrap(),
+                "google_busy"
+            );
+        }
+        let path = f.path.join("google.dpapi");
+        let original = std::fs::read(&path).unwrap();
+        assert_eq!(
+            state.set_selected("unknown", true).err().unwrap(),
+            "google_selection_invalid"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        let backup = path.with_extension("test-backup");
+        std::fs::rename(&path, &backup).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(state.set_selected("fixture", true).is_err());
+        assert!(state.load().unwrap().selected_ids.is_empty());
+        assert_eq!(std::fs::read(&backup).unwrap(), original);
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[test]
+    fn catalog_changes_keep_selected_ids_but_do_not_auto_select_new_or_other_accounts() {
+        let mut saved = record("Original");
+        saved.selected_ids = Some(vec!["fixture".into()]);
+        let mut renamed = saved.calendars[0].clone();
+        renamed.name = "Renamed".into();
+        let mut added = renamed.clone();
+        added.id = "new".into();
+        added.primary = false;
+        let next = vec![added.clone(), renamed.clone()];
+        assert_eq!(saved.selection_for_reconnection(&next), ["fixture"]);
+        saved.replace_calendars(next);
+        assert_eq!(saved.selected_ids.as_ref().unwrap(), &["fixture"]);
+        let mut other_account = renamed;
+        other_account.id = "another-account".into();
+        assert!(
+            saved
+                .selection_for_reconnection(&[other_account])
+                .is_empty()
+        );
+        saved.replace_calendars(vec![added]);
+        assert!(saved.selected_ids.as_ref().unwrap().is_empty());
+    }
+
+    #[test]
+    fn invalid_saved_selection_is_protected() {
+        let config = ClientConfig::parse(
+            br#"{"client_id":"fixture.apps.googleusercontent.com","client_secret":"fixture"}"#,
+        )
+        .unwrap();
+        for ids in [
+            vec!["unknown".into()],
+            vec!["fixture".into(), "fixture".into()],
+        ] {
+            let mut saved = record("Original");
+            saved.selected_ids = Some(ids);
+            assert!(saved.validate(&config).is_err());
+        }
+    }
+
+    #[test]
+    fn an_existing_different_migration_backup_is_never_overwritten() {
+        let f = Fixture::new();
+        let path = f.path.join("google.dpapi");
+        let mut legacy = record("Original");
+        legacy.selected_ids = None;
+        let store = GoogleStore::new(path.clone());
+        store.save(&legacy).unwrap();
+        drop(store);
+        let original = std::fs::read(&path).unwrap();
+        let backup = path.with_extension("dpapi.before-selection.bak");
+        std::fs::write(&backup, b"previous-backup").unwrap();
+        let state = f.state();
+        assert!(state.set_selected("fixture", true).is_err());
+        assert!(state.load().unwrap().selected_ids.is_empty());
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        assert_eq!(std::fs::read(&backup).unwrap(), b"previous-backup");
     }
     #[test]
     fn failed_save_keeps_the_previous_in_memory_catalog_and_disk_bytes() {
@@ -627,6 +852,7 @@ mod tests {
             refresh_token: "fixture".into(),
             expires_at_ms: 1,
             calendars: vec![],
+            selected_ids: Some(vec![]),
         };
         assert_eq!(
             record.validate(&config).unwrap_err(),
