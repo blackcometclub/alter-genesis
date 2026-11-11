@@ -37,6 +37,8 @@
         "languages": ["English", "Japanese"],
         "displayLanguageSelector": false,
         "startMenuFolder": "TINMOON",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
         "installerHooks": "./windows/installer-hooks.nsh"
       }
     },

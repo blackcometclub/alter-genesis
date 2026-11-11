@@ -52,7 +52,7 @@ try {
     Copy-Item -LiteralPath $executable -Destination (Join-Path $output 'alter-genesis.exe')
     Copy-Item -LiteralPath (Join-Path $appDirectory 'src-tauri\target\release\nsis\x64\installer.nsi') -Destination (Join-Path $output 'generated-installer.nsi')
 
-    $sourcePaths = @('app/src-tauri/tauri.conf.json', 'app/src-tauri/windows/installer-hooks.nsh', 'app/src-tauri/build.rs', 'app/src-tauri/Cargo.lock', 'app/package-lock.json', 'tools/Build-TauriInstaller.ps1')
+    $sourcePaths = @('app/src-tauri/tauri.conf.json', 'app/src-tauri/windows/installer-hooks.nsh', 'app/src-tauri/build.rs', 'app/src-tauri/Cargo.lock', 'app/package-lock.json', 'tools/Build-TauriInstaller.ps1', 'app/src-tauri/icons/app-icon.svg', 'app/src-tauri/icons/icon.ico', 'app/src-tauri/icons/32x32.png')
     $sources = foreach ($relative in $sourcePaths) {
         [ordered]@{ path=$relative; sha256=(Get-FileHash -LiteralPath (Join-Path $repositoryRoot $relative)).Hash }
     }
