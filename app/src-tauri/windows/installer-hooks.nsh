@@ -1,4 +1,28 @@
 ; Tauri provides COM.nsh and owns install/update handling. Keep its template intact.
+; Tell Shell which installed items changed, including /UPDATE where shortcuts
+; are deliberately retained. Do not flush unrelated icons or restart Explorer.
+!macro NSIS_HOOK_POSTINSTALL
+  Push $0
+  System::Call 'shell32::SHChangeNotify(i 0x00002000, i 0x00001005, w "$INSTDIR\${MAINBINARYNAME}.exe", p 0)'
+
+  !insertmacro IsShortcutTarget "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+  Pop $0
+  ${If} $0 = 1
+    System::Call 'shell32::SHChangeNotify(i 0x00002000, i 0x00001005, w "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk", p 0)'
+  ${EndIf}
+  !insertmacro IsShortcutTarget "$SMPROGRAMS\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+  Pop $0
+  ${If} $0 = 1
+    System::Call 'shell32::SHChangeNotify(i 0x00002000, i 0x00001005, w "$SMPROGRAMS\${PRODUCTNAME}.lnk", p 0)'
+  ${EndIf}
+  !insertmacro IsShortcutTarget "$DESKTOP\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+  Pop $0
+  ${If} $0 = 1
+    System::Call 'shell32::SHChangeNotify(i 0x00002000, i 0x00001005, w "$DESKTOP\${PRODUCTNAME}.lnk", p 0)'
+  ${EndIf}
+  Pop $0
+!macroend
+
 ; Only remove our exact startup entry on a real uninstall, never during /UPDATE.
 !macro NSIS_HOOK_POSTUNINSTALL
   ${If} $UpdateMode <> 1

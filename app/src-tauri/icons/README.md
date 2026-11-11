@@ -21,6 +21,7 @@ npm run tauri -- icon src-tauri/icons/app-icon.svg --output ../artifacts/icon-ge
 - トレイ: 既存の`default_window_icon()`を使い、本体と同じマークにする。
 - タスクバー: 通常の窓アイコンとは別の`ICON_BIG`へ、EXEに埋め込んだ共有アイコンを起動時に指定する。Explorerのキャッシュやピン留めを変更しない。
 - NSISのSetup/アンインストーラー: `installerIcon`/`uninstallerIcon`で同じ`icon.ico`を指定する。
+- インストール後: 本体と、その本体を指す既存ショートカットだけに`SHChangeNotify(SHCNE_UPDATEITEM)`を送る。キャッシュ全体の削除やExplorer再起動は行わない。すでに表示中のタスクバーが必ず即時更新されるという保証にはしない。
 - Store向けPNGも同じ原本から生成する。MSIX化・Microsoft Storeへの提出は別の作業。
 
 透明な余白と外周の角丸を保ち、横へ伸ばしたり色帯を細くしたりしない。
