@@ -30,17 +30,45 @@ Closing a Google reminder marks its local record dismissed to prevent duplicate 
 
 ## Demonstration sequence
 
-Use the final candidate build and synthetic event content. Do not use personal event details. Use English in the Google consent flow and in the app for the demonstration.
+撮影台本の準備段階。未撮影・未アップロード・未提出。2026-11-11に下記公式要件と現行Svelteの操作入口を照合した。実際に使う本体の版・SHAは撮影直前に記録する。
 
-1. Show the app name and the public introduction/privacy pages. In the app, show the policy entry once it has been implemented and verified.
-2. Click Connect in the desktop app. Show the external browser flow, the correct app name, both requested read-only permissions, and the OAuth client ID in the consent page address bar. The client ID is a public identifier; do not reveal the client secret, tokens, verification codes, or unrelated account information.
-3. After the user grants consent, show the actual calendar list and select the test calendar. Explain that the list scope enables this selection.
-4. In Google Calendar, prepare a short test event with a popup reminder a few minutes before its start. Show the start time and reminder offset.
-5. Refresh the desktop app, then show the resulting card and optional sound at the computed reminder time. Explain that the event scope provides the title, time, and reminder settings. Do not substitute the app's sample-preview notification for this step.
-6. Show Remind in 5 min and Close if useful to explain local use. Do not claim the app edits the Google event. Do not demonstrate a card-to-calendar link until it exists in the final build.
-7. Close with the local storage and disconnect behavior. If demonstrating a real disconnection, use an agreed test connection rather than the user's daily connection.
+### 公式要件と今回の撮り方
 
-Prepare a real recording and review it before upload. Upload and verification submission are separate actions requiring explicit authorization. The recording must remain accessible to Google's reviewers. A written script or screenshots alone are not a recorded demonstration.
+Googleは、英語での実際のOAuth許可操作、同意画面のアプリ名と申請する権限、アドレスバーのOAuth client ID、各権限を使う機能を求めている。アプリもEnglishにそろえ、短い英語字幕で用途を説明する。録画は音声込みで4〜6分を目安とするが、これは今回の構成案でありGoogle指定の長さではない。
+
+- [Verification requirements: App functionality demonstration video](https://support.google.com/cloud/answer/13464321?hl=en)
+- [Sensitive scope verification: submission steps / video](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)
+
+### 録画前に整えるもの
+
+- 審査に出すTauri本体一つを使う。WPFや別の検証用アプリへ途中で切り替えない。
+- アプリの言語をEnglish、通知音を聞こえる設定にする。Googleの同意画面も左下の言語でEnglishへ。録画範囲にアプリとブラウザーを含め、システム音が入るか短い試し録りをする。
+- Google Calendarに撮影用のカレンダーと架空の予定だけを用意する。例: calendar `ALTER GENESIS Demo`、event `Demo reminder`。作成・変更はGoogle Calendar上で行う。現在の実カレンダーや実予定を改名・削除しない。
+- 録画でConnectから許可画面まで進められる状態を先に確認する。現在の通常接続を無断で切らない。アプリのDisconnectはGoogleの許可を撤回しないので、切断だけで完全な同意画面が必ず再表示されるとは扱わない。必要なら撮影に使う承認済みテストアカウントで準備する。現在の接続・選択をどう戻すかを決めてから操作する。
+- パスワード、2段階認証、OAuth client secret、token、認可コード、callback URL、実予定、無関係なアカウントや通知を映さない。client IDは公開識別子なので、同意画面で読めるように残す。ログや認証ファイル、Consoleのクライアントシークレット画面は開かない。
+- 許可画面からアプリへ戻るまでの流れは省略しない。callbackのアドレスバーに認可コード等が出る箇所は隠し、権限やclient IDが必要な同意画面は隠さない。完成動画を全編見てから共有する。
+
+### 撮る順番
+
+| 順番 | 撮る操作 | 見せる目的 / 英語字幕案 |
+| --- | --- | --- |
+| 1 | Tauriの設定画面でアプリ名と新しいアイコンを見せる。`Privacy policy`を押し、英語ページを短く見せて設定へ戻る。 | `ALTER GENESIS is a Windows reminder app. Its privacy policy is available before connecting to Google.` |
+| 2 | `Connect` → 普段のブラウザー → 撮影用アカウント選択 → 英語のGoogle同意画面。アプリ名、アドレスバーのclient ID、カレンダー一覧と予定の参照の2権限を読める状態にし、両方を許可する。未確認アプリの案内が出た場合も、実際に出た流れを撮る。 | `The user grants read-only access to the calendar list and calendar events in the external browser.` |
+| 3 | アプリへ戻り、取得したカレンダー名と色を見せる。撮影用カレンダーにチェックを付ける。 | `Calendar list access lets the user choose which calendars provide reminders.` |
+| 4 | Google Calendarで撮影用予定を作成して保存する。開始を「今から5分後」、通知を「2分前」にする例なら、通知は約3分後。予定名・日付・開始時刻・通知の2分前を見せ、実時刻から通知予定時刻を字幕で明記する。 | `This event starts at 14:10. Google Calendar specifies a reminder two minutes before, at 14:08.` ※時刻は当日の実値へ差し替える。 |
+| 5 | アプリで`Refresh`を押し、取得完了を待つ。設定を閉じてトレイ常駐にし、通知予定時刻に同じ予定名・開始時刻のカードと音が出るところを撮る。間に合わない場合はGoogle側で未来の時刻へ変更し、更新して撮り直す。 | `Event access supplies the title, start time, and reminder settings. The app displays a local reminder at the Google Calendar reminder time.` |
+| 6 | カードの`Close`を押して消えるところまで撮る。 | `Closing this card dismisses the local reminder. It does not change the Google Calendar event.` |
+
+1〜3の認可と一覧表示、4〜5の実予定と通知の対応が中心。待ち時間だけ短縮する場合は、英語字幕で時間経過と実際の通知時刻を示す。通知を後付けで合成したり、試聴や架空のカードを実Google通知の代わりに使ったりしない。
+
+`5分後に再通知`、繰り返し音、終日9時、再起動、インストール操作は今回の短い動画には含めない案。Googleの各権限の用途を示すために必要な流れへ絞る。Googleから追加説明を求められたら補足する。カードからGoogleの予定を開く操作は現行Tauriに存在しないため撮らない。
+
+### 録画後
+
+- 英語の同意画面・2権限・client ID・一覧選択・Googleの通知時刻・実カードが読めるか全編確認する。音と個人情報の映り込みも確認する。
+- 撮影のために変更した言語・接続・選択を元へ戻し、試験予定などの扱いを利用者と確認する。録画ファイルは成果物として保持し、勝手に削除・アップロードしない。
+- 共有時は公式案内どおりYouTubeのUnlisted（限定公開）を使う。Private（非公開）と混同しない。アップロードとGoogleへの提出・公開切替は別途承認後に実施する。
+- state未使用のConsole警告は前の確認で残存している。動画の準備と診断の解消を分け、提出前に再確認する。台本だけで審査用の動画が完成したとは扱わない。
 
 ## Fields still to fill
 
