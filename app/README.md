@@ -155,7 +155,9 @@ Rustが再生と反復期限を所有し、通知の表示状態はNotificationS
 
 2026-11-10、[Google公式のSensitive scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)を確認。既存WPFの要求権限はカレンダー一覧と予定の読取りのみ。一般向けOAuth配布では、ブランド確認・要求権限の審査に備え、アプリ紹介ページ、プライバシーポリシー、ドメイン所有確認、各権限の必要理由、英語の認可フローと機能を示す動画を準備する。個人・開発テスト利用には審査の例外があるが、一般配布の完成条件とは分ける。
 
-紹介ページとプライバシーポリシーを日英で公開し、サイトの所有確認・承認済みドメイン登録・Google側のホームページとポリシーURL保存を完了した。Googleの公開状態はテスト中で、審査は未提出。[紹介ページ](https://tinmoon-label-site.pages.dev/works/alter-genesis/)、[プライバシーポリシー](https://tinmoon-label-site.pages.dev/works/alter-genesis/privacy/)。ポリシーはGoogle連携を備えたWindows検証版の扱いを説明しており、TauriのGoogle移植後に再照合する。
+紹介ページとプライバシーポリシーを日英で公開し、サイトの所有確認・承認済みドメイン登録・Google側のホームページとポリシーURL保存を完了した。2026-11-11にTauri版の動作へ合わせた日英本文を公開した。Googleの公開状態はテスト中で、審査は未提出。[紹介ページ](https://tinmoon-label-site.pages.dev/works/alter-genesis/)、[プライバシーポリシー](https://tinmoon-label-site.pages.dev/works/alter-genesis/privacy/)。
+
+設定のGoogleカレンダー見出しの横からポリシーを既定のブラウザーで開ける。Googleの接続・更新状態とは独立し、設定の表示言語に合わせて日本語または英語の公開ページを選ぶ。既存のTauri公式openerを使い、追加の権限や設定保存項目は設けない。新しい本体での表示とブラウザー起動の利用者確認は、実装・ビルドの確認と分けて記録する。
 
 ## 責任の分け方
 

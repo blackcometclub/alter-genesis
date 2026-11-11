@@ -4,6 +4,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { onMount, onDestroy } from "svelte";
 
   type Language = "system" | "english" | "japanese";
@@ -44,6 +45,8 @@
       notificationSound: "通知音",
       preview: "試聴",
       google: "Googleカレンダー",
+      privacy: "プライバシーポリシー",
+      privacyOpenError: "ブラウザーを開けませんでした。もう一度お試しください。",
       allDay: "終日",
       untitled: "（無題）",
       connect: "接続",
@@ -117,6 +120,8 @@
       notificationSound: "Notification sound",
       preview: "Preview",
       google: "Google Calendar",
+      privacy: "Privacy policy",
+      privacyOpenError: "The browser could not be opened. Please try again.",
       allDay: "All day",
       untitled: "Untitled",
       connect: "Connect",
@@ -196,6 +201,8 @@
   let blocked = $state(false);
   let errorCode = $state("");
   let previewing = $state(false);
+  let privacyOpening = $state(false);
+  let privacyError = $state(false);
   let startupEnabled = $state(false);
   let startupLoaded = $state(false);
   let startupBusy = $state(false);
@@ -227,6 +234,9 @@
         : systemLocale,
   );
   const text = $derived(copy[locale]);
+  const privacyUrl = $derived(locale === "en"
+    ? "https://tinmoon-label-site.pages.dev/en/works/alter-genesis/privacy/"
+    : "https://tinmoon-label-site.pages.dev/works/alter-genesis/privacy/");
   const startupMessage = $derived(startupError === "startup_conflict" ? text.startupConflict
     : startupError === "write" ? text.startupWriteError : startupError ? text.startupReadError : "");
   const googleMessage = $derived(googleError ? text.errors[googleError as keyof typeof text.errors] ?? text.errors.google_network_error : "");
@@ -287,6 +297,19 @@
       } finally { googleBusy = false; }
     }
   });
+
+  async function openPrivacy(event: MouseEvent) {
+    if (!(browser && "__TAURI_INTERNALS__" in window)) return;
+    event.preventDefault();
+    if (privacyOpening) return;
+    privacyOpening = true;
+    privacyError = false;
+    try {
+      await openUrl(privacyUrl);
+    } catch {
+      privacyError = true;
+    } finally { privacyOpening = false; }
+  }
 
   async function loadStartup() {
     if (panelMode || startupBusy) return;
@@ -558,7 +581,12 @@
       <p class="settings-error" role="alert">{errorMessage}</p>
     {/if}
     <section class="google-section" aria-label={text.google} aria-busy={googleBusy || selectionSaving}>
-      <h2>{text.google}</h2>
+      <div class="google-heading">
+        <h2>{text.google}</h2>
+        <a class="privacy-link" href={privacyUrl} target="_blank" rel="noreferrer"
+          aria-busy={privacyOpening} onclick={openPrivacy}>{text.privacy}</a>
+      </div>
+      {#if privacyError}<p class="settings-error" role="alert">{text.privacyOpenError}</p>{/if}
       <div class="google-actions">
         {#if !google.connected || needsReconnect}
           <button class="settings-button" type="button" disabled={googleBusy || selectionSaving || !google.configured || !!google.error} onclick={() => googleAction("connect_google")}>{googleBusy ? text.connecting : needsReconnect ? text.reconnect : text.connect}</button>
@@ -670,7 +698,11 @@
   .settings-button:disabled { opacity: 0.58; cursor: default; }
 
   .google-section { margin-top: 24px; }
-  .google-section h2 { margin: 0 0 8px; font-size: 14px; font-weight: 600; line-height: 20px; }
+  .google-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .google-section h2 { margin: 0; font-size: 14px; font-weight: 600; line-height: 20px; }
+  .privacy-link { display: inline-flex; align-items: center; min-height: var(--control-height); color: #8aa8c6; font-size: 13px; line-height: 20px; text-underline-offset: 4px; }
+  .privacy-link:hover { color: #dbdbdb; }
+  .privacy-link:focus-visible { outline: 2px solid #8aa8c6; outline-offset: 1px; border-radius: 2px; }
   .google-actions { display: flex; gap: 8px; }
   .google-account, .google-message { margin: 12px 0 0; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
   .google-calendars { max-height: 160px; overflow-y: auto; margin: 12px 0 0; padding: 0; list-style: none; }
