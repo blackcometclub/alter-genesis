@@ -145,63 +145,61 @@ pub async fn receive_code(listener: TcpListener, state: CsrfToken) -> Result<Str
         .local_addr()
         .map_err(|_| "google_callback_failed")?
         .to_string();
-    let wait = async {
-        for _ in 0..128 {
-            let (mut stream, peer) = listener
-                .accept()
-                .await
-                .map_err(|_| "google_callback_failed")?;
-            if !peer.ip().is_loopback() {
-                continue;
-            }
-            let mut bytes = Vec::new();
-            let read = tokio::time::timeout(Duration::from_secs(4), async {
-                let mut chunk = [0u8; 1024];
-                while bytes.len() < 16_384 && !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
-                    let count = stream.read(&mut chunk).await?;
-                    if count == 0 {
-                        break;
-                    }
-                    bytes.extend_from_slice(&chunk[..count]);
-                }
-                Ok::<_, std::io::Error>(())
-            })
-            .await;
-            if !matches!(read, Ok(Ok(()))) {
-                continue;
-            }
-            let result = if bytes.len() < 16_384 {
-                std::str::from_utf8(&bytes)
-                    .ok()
-                    .and_then(|r| callback(r, &host, &state))
-            } else {
-                None
-            };
-            let valid = result.is_some();
-            let body = if valid {
-                "<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><title>ALTER GENESIS</title><body><h1>ALTER GENESIS</h1><p>ログイン結果を受け取りました。アプリに戻ってください。</p><p>You can close this tab and return to the app.</p></body></html>"
-            } else {
-                "Invalid callback."
-            };
-            let status = if valid { "200 OK" } else { "400 Bad Request" };
-            let response = format!(
-                "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; base-uri 'none'; frame-ancestors 'none'\r\nConnection: close\r\n\r\n{body}",
-                body.len()
-            );
-            let _ = tokio::time::timeout(
-                Duration::from_secs(2),
-                stream.write_all(response.as_bytes()),
-            )
-            .await;
-            if let Some(result) = result {
-                return result;
-            }
+    // The user controls how long sign-in takes in the external browser.
+    // GoogleState::connect drops this future when the user cancels.
+    // Keep the short per-request I/O deadlines below for unresponsive sockets.
+    for _ in 0..128 {
+        let (mut stream, peer) = listener
+            .accept()
+            .await
+            .map_err(|_| "google_callback_failed")?;
+        if !peer.ip().is_loopback() {
+            continue;
         }
-        Err("google_callback_failed".into())
-    };
-    tokio::time::timeout(Duration::from_secs(600), wait)
-        .await
-        .map_err(|_| "google_login_timeout".to_owned())?
+        let mut bytes = Vec::new();
+        let read = tokio::time::timeout(Duration::from_secs(4), async {
+            let mut chunk = [0u8; 1024];
+            while bytes.len() < 16_384 && !bytes.windows(4).any(|w| w == b"\r\n\r\n") {
+                let count = stream.read(&mut chunk).await?;
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&chunk[..count]);
+            }
+            Ok::<_, std::io::Error>(())
+        })
+        .await;
+        if !matches!(read, Ok(Ok(()))) {
+            continue;
+        }
+        let result = if bytes.len() < 16_384 {
+            std::str::from_utf8(&bytes)
+                .ok()
+                .and_then(|r| callback(r, &host, &state))
+        } else {
+            None
+        };
+        let valid = result.is_some();
+        let body = if valid {
+            "<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><title>ALTER GENESIS</title><body><h1>ALTER GENESIS</h1><p>ログイン結果を受け取りました。アプリに戻ってください。</p><p>You can close this tab and return to the app.</p></body></html>"
+        } else {
+            "Invalid callback."
+        };
+        let status = if valid { "200 OK" } else { "400 Bad Request" };
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; base-uri 'none'; frame-ancestors 'none'\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        let _ = tokio::time::timeout(
+            Duration::from_secs(2),
+            stream.write_all(response.as_bytes()),
+        )
+        .await;
+        if let Some(result) = result {
+            return result;
+        }
+    }
+    Err("google_callback_failed".into())
 }
 
 #[cfg(test)]
@@ -289,5 +287,36 @@ mod tests {
             assert!(!response.contains("code=fixture"));
         }
         assert_eq!(server.await.unwrap().unwrap(), "fixture");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sign_in_can_finish_after_more_than_ten_minutes() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(receive_code(listener, CsrfToken::new("expected".into())));
+        tokio::task::yield_now().await;
+
+        tokio::time::advance(Duration::from_secs(601)).await;
+        tokio::task::yield_now().await;
+        assert!(!server.is_finished(), "sign-in must wait for the user");
+        tokio::time::resume();
+
+        let mut socket = tokio::net::TcpStream::connect(address).await.unwrap();
+        socket.write_all(format!("GET /oauth2callback?state=expected&code=fixture HTTP/1.1\r\nHost: {address}\r\n\r\n").as_bytes()).await.unwrap();
+        let mut response = String::new();
+        socket.read_to_string(&mut response).await.unwrap();
+        assert!(response.starts_with("HTTP/1.1 200"));
+        assert_eq!(server.await.unwrap().unwrap(), "fixture");
+    }
+
+    #[tokio::test]
+    async fn dropping_sign_in_releases_the_callback_listener() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(receive_code(listener, CsrfToken::new("expected".into())));
+        tokio::task::yield_now().await;
+        server.abort();
+        assert!(server.await.unwrap_err().is_cancelled());
+        assert!(tokio::net::TcpStream::connect(address).await.is_err());
     }
 }

@@ -31,6 +31,9 @@ zeroize = "1.9"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 sha2 = "0.10"
 
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = ["Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem"] }
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Media_Audio", "Win32_Security_Cryptography", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging"] }

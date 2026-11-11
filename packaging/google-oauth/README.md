@@ -41,6 +41,16 @@ Browser Useで警告を展開すると、対象クライアントは「ALTER GEN
 
 根拠は上記ソース、既存`google_auth::tests`、Googleの[概要ヘルプ](https://support.google.com/cloud/answer/15548748?hl=ja#use-secure-flows)と[stateのベストプラクティス](https://developers.google.com/identity/protocols/oauth2/resources/best-practices?hl=ja#use_the_state_parameter)。元の認可コード・state値・ブラウザー履歴全体を提出資料へ添付しない。
 
+### ログイン待ちと撮影の進め方（2026-11-11）
+
+ブラウザーでの操作に時間がかかっても、アプリはログイン全体を10分で打ち切らない。完了、Google側からのエラー、利用者のCancel、アプリ終了で待受を終える。個々のHTTP要求の読取・応答に対する短い期限は、操作待ちとは別に維持する。
+
+もうあるか：アプリに既存のCancellationTokenとCancel操作があるため、それを使う。Tokioの待受FutureはCancel時に破棄され、ローカルのTCP待受も閉じる。別のタイマーや停止機構を追加しない。
+
+手で使う順番は、Connect → ブラウザーで言語・アカウント・権限を選ぶ → 完了してアプリへ戻る。中止する場合はアプリのCancel。撮影では操作ごとに時間制限を設けず、完了の合図で止める。取得した素材と、接続完了まで確認できた動画を区別する。
+
+変更後の確認: 仮想時計を601秒進めた後も待受が続き、正しいcallbackで成功する試験と、待受Futureの破棄でポートが閉じる試験を追加。OAuthの5試験とRustライブラリー全46試験に合格。実Google接続とインストール済み本体での確認は更新後に別途行う。
+
 ## 先に直す説明・入口
 
 以下は2026-11-11の修正前の公開文面と現行コードを比較した差分。その後の日英本文公開とアプリ内入口の進捗は、下のチェックリストで管理する。

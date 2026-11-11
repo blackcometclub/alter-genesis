@@ -34,7 +34,7 @@ Closing a Google reminder marks its local record dismissed to prevent duplicate 
 
 ### 公式要件と今回の撮り方
 
-Googleは、英語での実際のOAuth許可操作、同意画面のアプリ名と申請する権限、アドレスバーのOAuth client ID、各権限を使う機能を求めている。アプリもEnglishにそろえ、短い英語字幕で用途を説明する。録画は音声込みで4〜6分を目安とするが、これは今回の構成案でありGoogle指定の長さではない。
+Googleは、英語での実際のOAuth許可操作、同意画面のアプリ名と申請する権限、アドレスバーのOAuth client ID、各権限を使う機能を求めている。アプリもEnglishにそろえ、短い英語字幕で用途を説明する。操作が終わった合図で録画を止め、秒数や分数による自動終了は使わない。
 
 - [Verification requirements: App functionality demonstration video](https://support.google.com/cloud/answer/13464321?hl=en)
 - [Sensitive scope verification: submission steps / video](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)
