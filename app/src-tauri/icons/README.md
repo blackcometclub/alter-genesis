@@ -19,6 +19,7 @@ npm run tauri -- icon src-tauri/icons/app-icon.svg --output ../artifacts/icon-ge
 
 - Windows本体と設定窓: `tauri.conf.json`の`bundle.icon`から埋め込む。
 - トレイ: 既存の`default_window_icon()`を使い、本体と同じマークにする。
+- タスクバー: 通常の窓アイコンとは別の`ICON_BIG`へ、EXEに埋め込んだ共有アイコンを起動時に指定する。Explorerのキャッシュやピン留めを変更しない。
 - NSISのSetup/アンインストーラー: `installerIcon`/`uninstallerIcon`で同じ`icon.ico`を指定する。
 - Store向けPNGも同じ原本から生成する。MSIX化・Microsoft Storeへの提出は別の作業。
 
